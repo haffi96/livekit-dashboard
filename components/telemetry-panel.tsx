@@ -32,22 +32,22 @@ export function TelemetryPanel() {
     averageSize: 0,
     lastReceived: null,
   });
-  
+
   const messageTimestamps = useRef<number[]>([]);
   const messageSizes = useRef<number[]>([]);
 
   const calculateRate = useCallback(() => {
     const now = Date.now();
     const windowStart = now - RATE_WINDOW_MS;
-    
+
     // Filter timestamps within the window
     messageTimestamps.current = messageTimestamps.current.filter(
       (ts) => ts > windowStart
     );
-    
+
     // Calculate rate (messages per second)
     const rate = messageTimestamps.current.length / (RATE_WINDOW_MS / 1000);
-    
+
     return rate;
   }, []);
 
@@ -60,7 +60,7 @@ export function TelemetryPanel() {
     // Add to timestamps for rate calculation
     messageTimestamps.current.push(now);
     messageSizes.current.push(size);
-    
+
     // Keep only recent sizes for average calculation
     if (messageSizes.current.length > 100) {
       messageSizes.current = messageSizes.current.slice(-100);
@@ -83,7 +83,7 @@ export function TelemetryPanel() {
     const averageSize =
       messageSizes.current.length > 0
         ? messageSizes.current.reduce((a, b) => a + b, 0) /
-          messageSizes.current.length
+        messageSizes.current.length
         : 0;
 
     setStats((prev) => ({
@@ -95,7 +95,9 @@ export function TelemetryPanel() {
   }, [calculateRate]);
 
   // Subscribe to the telemetry data channel
-  useDataChannel(TELEMETRY_CHANNEL, onMessage);
+  useDataChannel(TELEMETRY_CHANNEL, (msg) => {
+    onMessage(msg.payload as Uint8Array);
+  });
 
   // Update rate periodically
   useEffect(() => {
