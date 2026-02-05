@@ -12,7 +12,17 @@ import { VideoGrid, type TileSize } from "./video-grid";
 import { TelemetryPanel } from "./telemetry-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Wifi, WifiOff, Activity, ChevronRight, ChevronLeft, Maximize2, Minimize2, Square } from "lucide-react";
+import {
+  ArrowLeft,
+  Wifi,
+  WifiOff,
+  Activity,
+  ChevronRight,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Square,
+} from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useCredentials } from "@/lib/credentials/context";
@@ -59,7 +69,11 @@ function RoomContent({ roomName }: { roomName: string }) {
     }
   };
 
-  const tileSizeOptions: { value: TileSize; label: string; icon: React.ReactNode }[] = [
+  const tileSizeOptions: {
+    value: TileSize;
+    label: string;
+    icon: React.ReactNode;
+  }[] = [
     { value: "small", label: "Small", icon: <Minimize2 className="h-4 w-4" /> },
     { value: "medium", label: "Medium", icon: <Square className="h-4 w-4" /> },
     { value: "large", label: "Large", icon: <Maximize2 className="h-4 w-4" /> },
@@ -67,14 +81,14 @@ function RoomContent({ roomName }: { roomName: string }) {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl">
         {/* Header */}
         <header className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/">
                 <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  <ArrowLeft className="mr-2 h-4 w-4" />
                   Back
                 </Button>
               </Link>
@@ -83,7 +97,7 @@ function RoomContent({ roomName }: { roomName: string }) {
             </div>
             <div className="flex items-center gap-2">
               {/* Tile Size Controls */}
-              <div className="flex items-center gap-1 border border-neutral-800 rounded-md p-1">
+              <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">
                 {tileSizeOptions.map((option) => (
                   <Button
                     key={option.value}
@@ -117,20 +131,24 @@ function RoomContent({ roomName }: { roomName: string }) {
         </header>
 
         {/* Main Content */}
-        <div className={cn(
-          "grid gap-8 transition-all duration-300",
-          showTelemetry ? "lg:grid-cols-3" : "lg:grid-cols-1"
-        )}>
+        <div
+          className={cn(
+            "grid gap-8 transition-all duration-300",
+            showTelemetry ? "lg:grid-cols-3" : "lg:grid-cols-1",
+          )}
+        >
           {/* Video Grid */}
-          <div className={cn(showTelemetry ? "lg:col-span-2" : "lg:col-span-1")}>
-            <h2 className="text-lg font-semibold mb-4">Camera Feeds</h2>
+          <div
+            className={cn(showTelemetry ? "lg:col-span-2" : "lg:col-span-1")}
+          >
+            <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
             <VideoGrid tileSize={tileSize} />
           </div>
 
           {/* Telemetry Panel */}
           {showTelemetry && (
             <div className="lg:col-span-1">
-              <h2 className="text-lg font-semibold mb-4">Telemetry Data</h2>
+              <h2 className="mb-4 text-lg font-semibold">Telemetry Data</h2>
               <TelemetryPanel />
             </div>
           )}
@@ -194,8 +212,8 @@ export function RoomView({ roomName }: RoomViewProps) {
   // Loading credentials
   if (isLoadingCredentials) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500" />
       </div>
     );
   }
@@ -203,11 +221,11 @@ export function RoomView({ roomName }: RoomViewProps) {
   // No credentials - redirect to home
   if (!credentials) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <WifiOff className="h-12 w-12 mx-auto mb-4 text-neutral-500" />
-          <h2 className="text-xl font-semibold mb-2">Not Connected</h2>
-          <p className="text-neutral-400 mb-4">
+          <WifiOff className="mx-auto mb-4 h-12 w-12 text-neutral-500" />
+          <h2 className="mb-2 text-xl font-semibold">Not Connected</h2>
+          <p className="mb-4 text-neutral-400">
             Please configure your LiveKit credentials first.
           </p>
           <Link href="/">
@@ -220,9 +238,9 @@ export function RoomView({ roomName }: RoomViewProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-500" />
           <p className="text-neutral-400">Connecting to room...</p>
         </div>
       </div>
@@ -231,12 +249,12 @@ export function RoomView({ roomName }: RoomViewProps) {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <WifiOff className="h-12 w-12 mx-auto mb-4 text-red-500" />
-          <h2 className="text-xl font-semibold mb-2">Connection Error</h2>
-          <p className="text-neutral-400 mb-4">{error}</p>
-          <div className="flex gap-4 justify-center">
+          <WifiOff className="mx-auto mb-4 h-12 w-12 text-red-500" />
+          <h2 className="mb-2 text-xl font-semibold">Connection Error</h2>
+          <p className="mb-4 text-neutral-400">{error}</p>
+          <div className="flex justify-center gap-4">
             <Link href="/">
               <Button variant="outline">Back to Rooms</Button>
             </Link>

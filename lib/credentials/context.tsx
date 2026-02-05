@@ -27,7 +27,8 @@ const STORAGE_KEY = "livekit-credentials";
 const CredentialsContext = createContext<CredentialsContextValue | null>(null);
 
 export function CredentialsProvider({ children }: { children: ReactNode }) {
-  const [credentials, setCredentialsState] = useState<LiveKitCredentials | null>(null);
+  const [credentials, setCredentialsState] =
+    useState<LiveKitCredentials | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load credentials from sessionStorage on mount

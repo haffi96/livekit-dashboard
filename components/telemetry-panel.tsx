@@ -42,7 +42,7 @@ export function TelemetryPanel() {
 
     // Filter timestamps within the window
     messageTimestamps.current = messageTimestamps.current.filter(
-      (ts) => ts > windowStart
+      (ts) => ts > windowStart,
     );
 
     // Calculate rate (messages per second)
@@ -51,48 +51,51 @@ export function TelemetryPanel() {
     return rate;
   }, []);
 
-  const onMessage = useCallback((payload: Uint8Array) => {
-    const now = Date.now();
-    const decoder = new TextDecoder();
-    const dataString = decoder.decode(payload);
-    const size = payload.byteLength;
+  const onMessage = useCallback(
+    (payload: Uint8Array) => {
+      const now = Date.now();
+      const decoder = new TextDecoder();
+      const dataString = decoder.decode(payload);
+      const size = payload.byteLength;
 
-    // Add to timestamps for rate calculation
-    messageTimestamps.current.push(now);
-    messageSizes.current.push(size);
+      // Add to timestamps for rate calculation
+      messageTimestamps.current.push(now);
+      messageSizes.current.push(size);
 
-    // Keep only recent sizes for average calculation
-    if (messageSizes.current.length > 100) {
-      messageSizes.current = messageSizes.current.slice(-100);
-    }
+      // Keep only recent sizes for average calculation
+      if (messageSizes.current.length > 100) {
+        messageSizes.current = messageSizes.current.slice(-100);
+      }
 
-    const newMessage: TelemetryMessage = {
-      id: `${now}-${Math.random().toString(36).substring(7)}`,
-      timestamp: now,
-      data: dataString,
-      size,
-    };
+      const newMessage: TelemetryMessage = {
+        id: `${now}-${Math.random().toString(36).substring(7)}`,
+        timestamp: now,
+        data: dataString,
+        size,
+      };
 
-    setMessages((prev) => {
-      const updated = [newMessage, ...prev];
-      return updated.slice(0, MAX_MESSAGES);
-    });
+      setMessages((prev) => {
+        const updated = [newMessage, ...prev];
+        return updated.slice(0, MAX_MESSAGES);
+      });
 
-    // Update stats
-    const currentRate = calculateRate();
-    const averageSize =
-      messageSizes.current.length > 0
-        ? messageSizes.current.reduce((a, b) => a + b, 0) /
-        messageSizes.current.length
-        : 0;
+      // Update stats
+      const currentRate = calculateRate();
+      const averageSize =
+        messageSizes.current.length > 0
+          ? messageSizes.current.reduce((a, b) => a + b, 0) /
+            messageSizes.current.length
+          : 0;
 
-    setStats((prev) => ({
-      messageCount: prev.messageCount + 1,
-      currentRate,
-      averageSize,
-      lastReceived: now,
-    }));
-  }, [calculateRate]);
+      setStats((prev) => ({
+        messageCount: prev.messageCount + 1,
+        currentRate,
+        averageSize,
+        lastReceived: now,
+      }));
+    },
+    [calculateRate],
+  );
 
   // Subscribe to the telemetry data channel
   useDataChannel(TELEMETRY_CHANNEL, (msg) => {
@@ -129,24 +132,24 @@ export function TelemetryPanel() {
     <div className="space-y-4">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-neutral-900 border-neutral-800">
+        <Card className="border-neutral-800 bg-neutral-900">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-neutral-400 mb-1">
+            <div className="mb-1 flex items-center gap-2 text-neutral-400">
               <Zap className="h-4 w-4" />
               <span className="text-xs">Rate</span>
             </div>
             <div className="text-2xl font-bold">
               {stats.currentRate.toFixed(1)}
-              <span className="text-sm font-normal text-neutral-400 ml-1">
+              <span className="ml-1 text-sm font-normal text-neutral-400">
                 Hz
               </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-neutral-900 border-neutral-800">
+        <Card className="border-neutral-800 bg-neutral-900">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-neutral-400 mb-1">
+            <div className="mb-1 flex items-center gap-2 text-neutral-400">
               <Database className="h-4 w-4" />
               <span className="text-xs">Avg Size</span>
             </div>
@@ -156,9 +159,9 @@ export function TelemetryPanel() {
           </CardContent>
         </Card>
 
-        <Card className="bg-neutral-900 border-neutral-800">
+        <Card className="border-neutral-800 bg-neutral-900">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-neutral-400 mb-1">
+            <div className="mb-1 flex items-center gap-2 text-neutral-400">
               <Activity className="h-4 w-4" />
               <span className="text-xs">Total Messages</span>
             </div>
@@ -166,9 +169,9 @@ export function TelemetryPanel() {
           </CardContent>
         </Card>
 
-        <Card className="bg-neutral-900 border-neutral-800">
+        <Card className="border-neutral-800 bg-neutral-900">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-neutral-400 mb-1">
+            <div className="mb-1 flex items-center gap-2 text-neutral-400">
               <Clock className="h-4 w-4" />
               <span className="text-xs">Last Received</span>
             </div>
@@ -182,7 +185,7 @@ export function TelemetryPanel() {
       </div>
 
       {/* Messages Stream */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card className="border-neutral-800 bg-neutral-900">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium">
@@ -194,23 +197,23 @@ export function TelemetryPanel() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="h-80 overflow-y-auto space-y-2 font-mono text-xs">
+          <div className="h-80 space-y-2 overflow-y-auto font-mono text-xs">
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-neutral-500">
-                <Activity className="h-8 w-8 mb-2" />
+              <div className="flex h-full flex-col items-center justify-center text-neutral-500">
+                <Activity className="mb-2 h-8 w-8" />
                 <p>Waiting for telemetry data...</p>
               </div>
             ) : (
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className="p-2 bg-neutral-800 rounded border border-neutral-700"
+                  className="rounded border border-neutral-700 bg-neutral-800 p-2"
                 >
-                  <div className="flex items-center justify-between mb-1 text-neutral-400">
+                  <div className="mb-1 flex items-center justify-between text-neutral-400">
                     <span>{formatTime(msg.timestamp)}</span>
                     <span>{formatSize(msg.size)}</span>
                   </div>
-                  <pre className="text-neutral-200 whitespace-pre-wrap break-all overflow-hidden">
+                  <pre className="overflow-hidden break-all whitespace-pre-wrap text-neutral-200">
                     {msg.data.length > 500
                       ? `${msg.data.substring(0, 500)}...`
                       : msg.data}

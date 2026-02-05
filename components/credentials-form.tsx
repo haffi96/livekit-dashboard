@@ -4,9 +4,18 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { AlertTriangle, Key, Link, Lock } from "lucide-react";
-import { useCredentials, type LiveKitCredentials } from "@/lib/credentials/context";
+import {
+  useCredentials,
+  type LiveKitCredentials,
+} from "@/lib/credentials/context";
 
 interface CredentialsFormProps {
   onSuccess?: () => void;
@@ -81,7 +90,7 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="mx-auto w-full max-w-md">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Key className="h-5 w-5" />
@@ -93,15 +102,17 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
       </CardHeader>
       <CardContent>
         {/* Security Warning */}
-        <div className="mb-6 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+        <div className="mb-6 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
             <div className="text-sm">
-              <p className="font-medium text-yellow-500 mb-1">Session Storage Only</p>
+              <p className="mb-1 font-medium text-yellow-500">
+                Session Storage Only
+              </p>
               <p className="text-neutral-400">
-                Your credentials are stored in your browser session only and will be
-                cleared when you close this tab. They are never sent to any external
-                server except your own LiveKit server.
+                Your credentials are stored in your browser session only and
+                will be cleared when you close this tab. They are never sent to
+                any external server except your own LiveKit server.
               </p>
             </div>
           </div>
@@ -157,7 +168,7 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
@@ -167,8 +178,8 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
           </Button>
         </form>
 
-        <div className="mt-4 pt-4 border-t border-neutral-800">
-          <p className="text-xs text-neutral-500 text-center">
+        <div className="mt-4 border-t border-neutral-800 pt-4">
+          <p className="text-center text-xs text-neutral-500">
             Need credentials?{" "}
             <a
               href="https://cloud.livekit.io"

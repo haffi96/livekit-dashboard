@@ -15,14 +15,23 @@ const TokenRequestSchema = z.object({
 tokenRouter.post("/", async (c) => {
   try {
     const json = await c.req.json();
-    const { roomName, participantName, apiKey, apiSecret } = TokenRequestSchema.parse(json);
+    const { roomName, participantName, apiKey, apiSecret } =
+      TokenRequestSchema.parse(json);
 
-    const token = await createTokenWithCredentials(apiKey, apiSecret, roomName, participantName);
+    const token = await createTokenWithCredentials(
+      apiKey,
+      apiSecret,
+      roomName,
+      participantName,
+    );
 
     return c.json({ token });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: error.issues[0]?.message || "Invalid request" }, 400);
+      return c.json(
+        { error: error.issues[0]?.message || "Invalid request" },
+        400,
+      );
     }
     console.error("Error generating token:", error);
     return c.json({ error: "Failed to generate token" }, 500);

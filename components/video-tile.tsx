@@ -40,12 +40,19 @@ const defaultStats: VideoStats = {
   packetsLost: 0,
 };
 
-export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps) {
-  const participantName = trackRef.participant.name || trackRef.participant.identity;
+export function VideoTile({
+  trackRef,
+  showStats,
+  onToggleStats,
+}: VideoTileProps) {
+  const participantName =
+    trackRef.participant.name || trackRef.participant.identity;
   const [stats, setStats] = useState<VideoStats>(defaultStats);
 
   // Track previous bytes for bitrate calculation
-  const prevBytesRef = useRef<{ bytes: number; timestamp: number } | null>(null);
+  const prevBytesRef = useRef<{ bytes: number; timestamp: number } | null>(
+    null,
+  );
 
   const fetchStats = useCallback(async () => {
     const track = trackRef.publication?.track;
@@ -84,7 +91,8 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
           newStats.packetsReceived = packetsReceived;
 
           if (packetsReceived > 0) {
-            newStats.packetLoss = (packetsLost / (packetsReceived + packetsLost)) * 100;
+            newStats.packetLoss =
+              (packetsLost / (packetsReceived + packetsLost)) * 100;
           }
 
           // Calculate bitrate from bytes received delta
@@ -94,9 +102,12 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
           if (bytesReceived !== undefined && timestamp !== undefined) {
             if (prevBytesRef.current) {
               const bytesDelta = bytesReceived - prevBytesRef.current.bytes;
-              const timeDelta = (timestamp - prevBytesRef.current.timestamp) / 1000; // to seconds
+              const timeDelta =
+                (timestamp - prevBytesRef.current.timestamp) / 1000; // to seconds
               if (timeDelta > 0) {
-                newStats.bitrate = Math.round((bytesDelta * 8) / timeDelta / 1000); // kbps
+                newStats.bitrate = Math.round(
+                  (bytesDelta * 8) / timeDelta / 1000,
+                ); // kbps
               }
             }
             prevBytesRef.current = { bytes: bytesReceived, timestamp };
@@ -159,10 +170,13 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
   };
 
   return (
-    <Card className="overflow-hidden bg-neutral-900 border-neutral-800">
+    <Card className="overflow-hidden border-neutral-800 bg-neutral-900">
       {/* Video */}
       <div className="relative aspect-video bg-black">
-        <VideoTrack trackRef={trackRef} className="w-full h-full object-cover" />
+        <VideoTrack
+          trackRef={trackRef}
+          className="h-full w-full object-cover"
+        />
         <div className="absolute bottom-2 left-2">
           <Badge variant="secondary" className="bg-black/70 backdrop-blur-sm">
             {participantName}
@@ -175,7 +189,7 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
         variant="ghost"
         size="sm"
         onClick={onToggleStats}
-        className="w-full rounded-none border-t border-neutral-800 hover:bg-neutral-800 flex items-center justify-between px-3 py-2 h-auto"
+        className="flex h-auto w-full items-center justify-between rounded-none border-t border-neutral-800 px-3 py-2 hover:bg-neutral-800"
       >
         <span className="flex items-center gap-2 text-xs text-neutral-400">
           <BarChart3 className="h-3 w-3" />
@@ -192,10 +206,10 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
       <div
         className={cn(
           "overflow-hidden transition-all duration-200",
-          showStats ? "max-h-64" : "max-h-0"
+          showStats ? "max-h-64" : "max-h-0",
         )}
       >
-        <div className="p-3 border-t border-neutral-800 bg-neutral-950 space-y-2 text-xs font-mono">
+        <div className="space-y-2 border-t border-neutral-800 bg-neutral-950 p-3 font-mono text-xs">
           <StatRow label="Resolution" value={stats.resolution} />
           <StatRow
             label="Framerate"

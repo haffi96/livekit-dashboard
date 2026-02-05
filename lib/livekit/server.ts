@@ -17,7 +17,7 @@ function toHttpUrl(url: string): string {
 export async function listRoomsWithCredentials(
   url: string,
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
 ) {
   const httpUrl = toHttpUrl(url);
   const roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
@@ -35,7 +35,7 @@ export async function createTokenWithCredentials(
   apiKey: string,
   apiSecret: string,
   roomName: string,
-  participantName: string
+  participantName: string,
 ): Promise<string> {
   const token = new AccessToken(apiKey, apiSecret, {
     identity: participantName,

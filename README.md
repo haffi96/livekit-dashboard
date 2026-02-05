@@ -5,7 +5,6 @@ A Next.js application for monitoring and connecting to LiveKit rooms. View camer
 ![dashboard](./docs/dashboard-view.png)
 ![room-view](./docs/room-view.png)
 
-
 ## Features
 
 - **No Server Configuration Required**: Enter your LiveKit credentials directly in the UI
@@ -80,6 +79,7 @@ The app subscribes to a data channel named `telemetry` for receiving telemetry d
 ### Viewer Mode
 
 The dashboard operates in viewer-only mode:
+
 - Subscribers do not publish video/audio
 - Only camera feeds from livekit rooms are displayed
 - The local participant is excluded from the video grid

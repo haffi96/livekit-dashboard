@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { Users, Clock } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,7 +32,7 @@ export function RoomCard({
   };
 
   return (
-    <Card className="hover:border-neutral-700 transition-colors">
+    <Card className="transition-colors hover:border-neutral-700">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{name}</CardTitle>

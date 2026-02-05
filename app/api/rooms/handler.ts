@@ -20,9 +20,15 @@ roomsRouter.post("/", async (c) => {
     return c.json({ rooms });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: error.issues[0]?.message || "Invalid credentials" }, 400);
+      return c.json(
+        { error: error.issues[0]?.message || "Invalid credentials" },
+        400,
+      );
     }
     console.error("Error listing rooms:", error);
-    return c.json({ error: "Failed to list rooms. Please check your credentials." }, 500);
+    return c.json(
+      { error: "Failed to list rooms. Please check your credentials." },
+      500,
+    );
   }
 });

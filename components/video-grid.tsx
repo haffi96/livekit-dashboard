@@ -30,15 +30,15 @@ export function VideoGrid({ tileSize = "medium" }: VideoGridProps) {
   // Filter to only show tracks that are not from the local participant
   // (since local participant doesn't publish, this will show all camera feeds)
   const videoTracks = tracks.filter(
-    (trackRef) => trackRef.publication?.track !== undefined
+    (trackRef) => trackRef.publication?.track !== undefined,
   );
 
   if (videoTracks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 border border-dashed border-neutral-800 rounded-lg">
-        <Video className="h-12 w-12 mb-4 text-neutral-600" />
-        <h3 className="text-lg font-medium mb-2">No Video Feeds</h3>
-        <p className="text-neutral-400 text-center max-w-md">
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-800 py-16">
+        <Video className="mb-4 h-12 w-12 text-neutral-600" />
+        <h3 className="mb-2 text-lg font-medium">No Video Feeds</h3>
+        <p className="max-w-md text-center text-neutral-400">
           Waiting for camera feeds from connected devices...
         </p>
       </div>
@@ -46,7 +46,12 @@ export function VideoGrid({ tileSize = "medium" }: VideoGridProps) {
   }
 
   return (
-    <div className={cn("grid gap-4 transition-all duration-300", gridClasses[tileSize])}>
+    <div
+      className={cn(
+        "grid gap-4 transition-all duration-300",
+        gridClasses[tileSize],
+      )}
+    >
       {videoTracks.map((trackRef) => (
         <VideoTile
           key={trackRef.publication?.trackSid}
