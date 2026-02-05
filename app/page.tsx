@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { RoomCard } from "@/components/room-card";
 import { CredentialsForm } from "@/components/credentials-form";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Video, LogOut, Settings } from "lucide-react";
+import { RefreshCw, Video, LogOut } from "lucide-react";
 import { useCredentials } from "@/lib/credentials/context";
 
 interface Room {

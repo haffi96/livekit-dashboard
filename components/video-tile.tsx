@@ -43,7 +43,7 @@ const defaultStats: VideoStats = {
 export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps) {
   const participantName = trackRef.participant.name || trackRef.participant.identity;
   const [stats, setStats] = useState<VideoStats>(defaultStats);
-  
+
   // Track previous bytes for bitrate calculation
   const prevBytesRef = useRef<{ bytes: number; timestamp: number } | null>(null);
 
@@ -55,7 +55,7 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
       const report = await track.getRTCStatsReport();
       if (!report) return;
 
-      let newStats: Partial<VideoStats> = {};
+      const newStats: Partial<VideoStats> = {};
       let codecId: string | null = null;
 
       report.forEach((value) => {
@@ -63,7 +63,7 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
         if (value.type === "inbound-rtp" && value.kind === "video") {
           const frameWidth = value.frameWidth as number | undefined;
           const frameHeight = value.frameHeight as number | undefined;
-          
+
           if (frameWidth && frameHeight) {
             newStats.resolution = `${frameWidth}x${frameHeight}`;
           }
@@ -82,7 +82,7 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
           const packetsReceived = (value.packetsReceived as number) || 0;
           newStats.packetsLost = packetsLost;
           newStats.packetsReceived = packetsReceived;
-          
+
           if (packetsReceived > 0) {
             newStats.packetLoss = (packetsLost / (packetsReceived + packetsLost)) * 100;
           }
@@ -90,7 +90,7 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
           // Calculate bitrate from bytes received delta
           const bytesReceived = value.bytesReceived as number | undefined;
           const timestamp = value.timestamp as number | undefined;
-          
+
           if (bytesReceived !== undefined && timestamp !== undefined) {
             if (prevBytesRef.current) {
               const bytesDelta = bytesReceived - prevBytesRef.current.bytes;
@@ -140,12 +140,15 @@ export function VideoTile({ trackRef, showStats, onToggleStats }: VideoTileProps
       return;
     }
 
-    // Fetch immediately
-    fetchStats();
+    // Fetch immediately (using setTimeout to avoid sync setState in effect)
+    const initialTimeout = setTimeout(fetchStats, 0);
 
     // Then poll every second
     const interval = setInterval(fetchStats, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, [showStats, fetchStats]);
 
   const formatBitrate = (kbps: number) => {

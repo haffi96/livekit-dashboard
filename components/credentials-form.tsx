@@ -95,7 +95,7 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
         {/* Security Warning */}
         <div className="mb-6 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
             <div className="text-sm">
               <p className="font-medium text-yellow-500 mb-1">Session Storage Only</p>
               <p className="text-neutral-400">

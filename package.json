@@ -2,11 +2,12 @@
   "name": "monitoring-dashboard",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.9.0",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint ."
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.19",
