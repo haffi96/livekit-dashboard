@@ -15,10 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Wifi, WifiOff, Activity, ChevronRight, ChevronLeft, Maximize2, Minimize2, Square } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useCredentials } from "@/lib/credentials/context";
 
 interface RoomViewProps {
   roomName: string;
-  livekitUrl: string;
 }
 
 function RoomContent({ roomName }: { roomName: string }) {
@@ -144,12 +144,15 @@ function RoomContent({ roomName }: { roomName: string }) {
   );
 }
 
-export function RoomView({ roomName, livekitUrl }: RoomViewProps) {
+export function RoomView({ roomName }: RoomViewProps) {
+  const { credentials, isLoading: isLoadingCredentials } = useCredentials();
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchToken = useCallback(async () => {
+    if (!credentials) return;
+
     try {
       setIsLoading(true);
       setError(null);
@@ -160,11 +163,17 @@ export function RoomView({ roomName, livekitUrl }: RoomViewProps) {
       const response = await fetch("/api/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomName, participantName }),
+        body: JSON.stringify({
+          roomName,
+          participantName,
+          apiKey: credentials.apiKey,
+          apiSecret: credentials.apiSecret,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get access token");
+        const data = await response.json();
+        throw new Error(data.error || "Failed to get access token");
       }
 
       const data = await response.json();
@@ -174,11 +183,40 @@ export function RoomView({ roomName, livekitUrl }: RoomViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [roomName]);
+  }, [roomName, credentials]);
 
   useEffect(() => {
-    fetchToken();
-  }, [fetchToken]);
+    if (credentials) {
+      fetchToken();
+    }
+  }, [credentials, fetchToken]);
+
+  // Loading credentials
+  if (isLoadingCredentials) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
+  // No credentials - redirect to home
+  if (!credentials) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <WifiOff className="h-12 w-12 mx-auto mb-4 text-neutral-500" />
+          <h2 className="text-xl font-semibold mb-2">Not Connected</h2>
+          <p className="text-neutral-400 mb-4">
+            Please configure your LiveKit credentials first.
+          </p>
+          <Link href="/">
+            <Button>Go to Dashboard</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -215,7 +253,7 @@ export function RoomView({ roomName, livekitUrl }: RoomViewProps) {
 
   return (
     <LiveKitRoom
-      serverUrl={livekitUrl}
+      serverUrl={credentials.url}
       token={token}
       connect={true}
       audio={false}

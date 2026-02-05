@@ -8,8 +8,10 @@ A Next.js application for monitoring and connecting to LiveKit rooms. View camer
 
 ## Features
 
+- **No Server Configuration Required**: Enter your LiveKit credentials directly in the UI
 - **Room Listing**: View all active LiveKit rooms on the landing page
 - **Video Grid**: Subscribe to and display camera feeds from connected devices
+- **RTC Stats**: View detailed WebRTC statistics for each video track
 - **Telemetry Panel**: Real-time telemetry data visualization with:
   - Message rate (Hz)
   - Message size statistics
@@ -29,33 +31,25 @@ A Next.js application for monitoring and connecting to LiveKit rooms. View camer
 pnpm install
 ```
 
-2. Copy the environment example file and configure your LiveKit credentials:
-
-```bash
-cp .env.example .env.local
-```
-
-3. Edit `.env.local` with your LiveKit server details:
-
-```env
-# LiveKit Server Configuration
-LIVEKIT_API_URL=https://your-livekit-server.livekit.cloud
-LIVEKIT_API_KEY=your-api-key
-LIVEKIT_API_SECRET=your-api-secret
-
-# LiveKit Client Configuration (public)
-NEXT_PUBLIC_LIVEKIT_URL=wss://your-livekit-server.livekit.cloud
-```
-
-## Development
-
-Run the development server:
+2. Run the development server:
 
 ```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+3. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+4. Enter your LiveKit credentials when prompted:
+   - **LiveKit URL**: Your LiveKit server WebSocket URL (e.g., `wss://your-server.livekit.cloud`)
+   - **API Key**: Your LiveKit API key
+   - **API Secret**: Your LiveKit API secret
+
+## Security
+
+- **Session Storage Only**: Credentials are stored in your browser's session storage
+- **Cleared on Tab Close**: Credentials are automatically cleared when you close the browser tab
+- **No Server Storage**: Credentials are never stored on the server - they are passed per-request
+- **Direct Connection**: Credentials are only sent to your own LiveKit server
 
 ## Production
 
@@ -70,8 +64,8 @@ pnpm start
 
 ### API Routes
 
-- `GET /api/rooms` - List all active LiveKit rooms
-- `POST /api/token` - Generate a viewer token for joining a room
+- `POST /api/rooms` - List all active LiveKit rooms (requires credentials in body)
+- `POST /api/token` - Generate a viewer token for joining a room (requires credentials in body)
 - `GET /api/healthz` - Health check endpoint
 
 ### Data Channels

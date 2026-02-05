@@ -1,14 +1,28 @@
 import { RoomServiceClient, AccessToken } from "livekit-server-sdk";
-import { envServer } from "@/lib/env/server";
 
-export const roomService = new RoomServiceClient(
-  envServer.LIVEKIT_API_URL,
-  envServer.LIVEKIT_API_KEY,
-  envServer.LIVEKIT_API_SECRET
-);
+// Helper to convert WebSocket URL to HTTP URL for RoomServiceClient
+function toHttpUrl(url: string): string {
+  // RoomServiceClient needs http(s) URL, not ws(s)
+  // Handle all cases: wss://, ws://, https://, http://
+  if (url.startsWith("wss://")) {
+    return url.replace(/^wss:\/\//, "https://");
+  }
+  if (url.startsWith("ws://")) {
+    return url.replace(/^ws:\/\//, "http://");
+  }
+  // Already http(s), return as-is
+  return url;
+}
 
-export async function listRooms() {
+export async function listRoomsWithCredentials(
+  url: string,
+  apiKey: string,
+  apiSecret: string
+) {
+  const httpUrl = toHttpUrl(url);
+  const roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
   const rooms = await roomService.listRooms();
+
   return rooms.map((room) => ({
     name: room.name,
     numParticipants: room.numParticipants,
@@ -17,18 +31,16 @@ export async function listRooms() {
   }));
 }
 
-export async function createToken(
+export async function createTokenWithCredentials(
+  apiKey: string,
+  apiSecret: string,
   roomName: string,
   participantName: string
 ): Promise<string> {
-  const token = new AccessToken(
-    envServer.LIVEKIT_API_KEY,
-    envServer.LIVEKIT_API_SECRET,
-    {
-      identity: participantName,
-      name: participantName,
-    }
-  );
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: participantName,
+    name: participantName,
+  });
 
   token.addGrant({
     roomJoin: true,
