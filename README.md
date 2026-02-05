@@ -1,6 +1,10 @@
 # LiveKit Monitoring Dashboard
 
-A Next.js application for monitoring and connecting to LiveKit rooms. View camera feeds from AV streaming devices and receive telemetry data in real-time.
+A Next.js application for monitoring and connecting to LiveKit rooms. View camera feeds and receive telemetry data in real-time.
+
+![dashboard](./docs/dashboard-view.png)
+![room-view](./docs/room-view.png)
+
 
 ## Features
 
@@ -72,7 +76,7 @@ pnpm start
 
 ### Data Channels
 
-The app subscribes to a data channel named `telemetry` for receiving vehicle telemetry data. The telemetry panel displays:
+The app subscribes to a data channel named `telemetry` for receiving telemetry data. The telemetry panel displays:
 
 - Current message rate (Hz)
 - Average message size
@@ -83,7 +87,7 @@ The app subscribes to a data channel named `telemetry` for receiving vehicle tel
 
 The dashboard operates in viewer-only mode:
 - Subscribers do not publish video/audio
-- Only camera feeds from AV streaming devices are displayed
+- Only camera feeds from livekit rooms are displayed
 - The local participant is excluded from the video grid
 
 ## Tech Stack
