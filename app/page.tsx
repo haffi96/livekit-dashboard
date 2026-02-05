@@ -33,8 +33,6 @@ export default function Home() {
     try {
       const response = await fetch("/api/rooms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
       });
 
       if (!response.ok) {

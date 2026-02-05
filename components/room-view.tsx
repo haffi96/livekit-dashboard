@@ -184,8 +184,6 @@ export function RoomView({ roomName }: RoomViewProps) {
         body: JSON.stringify({
           roomName,
           participantName,
-          apiKey: credentials.apiKey,
-          apiSecret: credentials.apiSecret,
         }),
       });
 

@@ -9,61 +9,78 @@ import {
   type ReactNode,
 } from "react";
 
+// Client-side credentials only contains URL (secrets stay server-side)
+export interface ClientCredentials {
+  url: string;
+}
+
+// Full credentials for form submission (sent to server, not stored client-side)
 export interface LiveKitCredentials {
-  url: string; // e.g., wss://your-server.livekit.cloud
+  url: string;
   apiKey: string;
   apiSecret: string;
 }
 
 interface CredentialsContextValue {
-  credentials: LiveKitCredentials | null;
+  credentials: ClientCredentials | null;
   isLoading: boolean;
-  setCredentials: (credentials: LiveKitCredentials) => void;
-  clearCredentials: () => void;
+  setCredentials: (credentials: LiveKitCredentials) => Promise<void>;
+  clearCredentials: () => Promise<void>;
 }
-
-const STORAGE_KEY = "livekit-credentials";
 
 const CredentialsContext = createContext<CredentialsContextValue | null>(null);
 
 export function CredentialsProvider({ children }: { children: ReactNode }) {
-  const [credentials, setCredentialsState] =
-    useState<LiveKitCredentials | null>(null);
+  const [credentials, setCredentialsState] = useState<ClientCredentials | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load credentials from sessionStorage on mount
+  // Check session status on mount
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as LiveKitCredentials;
-        // Validate the stored data has required fields
-        if (parsed.url && parsed.apiKey && parsed.apiSecret) {
-          setCredentialsState(parsed);
+    async function checkSession() {
+      try {
+        const response = await fetch("/api/credentials");
+        const data = await response.json();
+
+        if (data.connected && data.url) {
+          setCredentialsState({ url: data.url });
         }
+      } catch (error) {
+        console.error("Error checking session:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading credentials from sessionStorage:", error);
-    } finally {
-      setIsLoading(false);
     }
+
+    checkSession();
   }, []);
 
-  const setCredentials = useCallback((newCredentials: LiveKitCredentials) => {
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(newCredentials));
-      setCredentialsState(newCredentials);
-    } catch (error) {
-      console.error("Error saving credentials to sessionStorage:", error);
-    }
-  }, []);
+  const setCredentials = useCallback(
+    async (newCredentials: LiveKitCredentials) => {
+      const response = await fetch("/api/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCredentials),
+      });
 
-  const clearCredentials = useCallback(() => {
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to set credentials");
+      }
+
+      const data = await response.json();
+      setCredentialsState({ url: data.url });
+    },
+    [],
+  );
+
+  const clearCredentials = useCallback(async () => {
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      await fetch("/api/credentials", { method: "DELETE" });
       setCredentialsState(null);
     } catch (error) {
-      console.error("Error clearing credentials from sessionStorage:", error);
+      console.error("Error clearing credentials:", error);
     }
   }, []);
 

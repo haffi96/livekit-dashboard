@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertTriangle, Key, Link, Lock } from "lucide-react";
+import { Shield, Key, Link, Lock } from "lucide-react";
 import {
   useCredentials,
   type LiveKitCredentials,
@@ -66,21 +66,9 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
       apiSecret: apiSecret.trim(),
     };
 
-    // Test the credentials by trying to list rooms
+    // Validate and store credentials via API (credentials stored in encrypted cookie)
     try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to connect to LiveKit server");
-      }
-
-      // Credentials are valid, save them
-      setCredentials(credentials);
+      await setCredentials(credentials);
       onSuccess?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect");
@@ -101,18 +89,18 @@ export function CredentialsForm({ onSuccess }: CredentialsFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Security Warning */}
-        <div className="mb-6 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
+        {/* Security Info */}
+        <div className="mb-6 rounded-lg border border-green-500/20 bg-green-500/10 p-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
             <div className="text-sm">
-              <p className="mb-1 font-medium text-yellow-500">
-                Session Storage Only
+              <p className="mb-1 font-medium text-green-500">
+                Encrypted Storage
               </p>
               <p className="text-neutral-400">
-                Your credentials are stored in your browser session only and
-                will be cleared when you close this tab. They are never sent to
-                any external server except your own LiveKit server.
+                Your credentials are encrypted and stored in a secure HTTP-only
+                cookie. Livekit secrets are never exposed to client-side
+                JavaScript or anywhere else.
               </p>
             </div>
           </div>
