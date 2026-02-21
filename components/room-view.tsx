@@ -9,7 +9,7 @@ import {
 } from "@livekit/components-react";
 import { ConnectionState } from "livekit-client";
 import { VideoGrid, type TileSize } from "./video-grid";
-import { TelemetryPanel } from "./telemetry-panel";
+import { DataPanel } from "./data-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,7 +33,7 @@ interface RoomViewProps {
 
 function RoomContent({ roomName }: { roomName: string }) {
   const connectionState = useConnectionState();
-  const [showTelemetry, setShowTelemetry] = useState(false);
+  const [showDataPanel, setShowDataPanel] = useState(false);
   const [tileSize, setTileSize] = useState<TileSize>("medium");
 
   const getConnectionBadge = () => {
@@ -111,16 +111,16 @@ function RoomContent({ roomName }: { roomName: string }) {
                   </Button>
                 ))}
               </div>
-              {/* Telemetry Toggle */}
+              {/* Data Panel Toggle */}
               <Button
-                variant={showTelemetry ? "secondary" : "outline"}
+                variant={showDataPanel ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => setShowTelemetry(!showTelemetry)}
+                onClick={() => setShowDataPanel(!showDataPanel)}
                 className="gap-2"
               >
                 <Activity className="h-4 w-4" />
-                Telemetry
-                {showTelemetry ? (
+                Data
+                {showDataPanel ? (
                   <ChevronRight className="h-4 w-4" />
                 ) : (
                   <ChevronLeft className="h-4 w-4" />
@@ -134,22 +134,22 @@ function RoomContent({ roomName }: { roomName: string }) {
         <div
           className={cn(
             "grid gap-8 transition-all duration-300",
-            showTelemetry ? "lg:grid-cols-3" : "lg:grid-cols-1",
+            showDataPanel ? "lg:grid-cols-3" : "lg:grid-cols-1",
           )}
         >
           {/* Video Grid */}
           <div
-            className={cn(showTelemetry ? "lg:col-span-2" : "lg:col-span-1")}
+            className={cn(showDataPanel ? "lg:col-span-2" : "lg:col-span-1")}
           >
             <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
             <VideoGrid tileSize={tileSize} />
           </div>
 
-          {/* Telemetry Panel */}
-          {showTelemetry && (
+          {/* Data Panel */}
+          {showDataPanel && (
             <div className="lg:col-span-1">
-              <h2 className="mb-4 text-lg font-semibold">Telemetry Data</h2>
-              <TelemetryPanel />
+              <h2 className="mb-4 text-lg font-semibold">Data Panel</h2>
+              <DataPanel />
             </div>
           )}
         </div>
