@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRoomContext } from "@livekit/components-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Send, Square, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  buildMessageEnvelope,
+  encodePayloadByMode,
+  type SerializationMode,
+} from "@/lib/data-serialization";
 
-export function DataSender() {
+interface DataSenderProps {
+  senderMode: SerializationMode;
+  onPublishSuccess?: (topic: string, timestamp: number) => void;
+}
+
+export function DataSender({ senderMode, onPublishSuccess }: DataSenderProps) {
   const room = useRoomContext();
   const [topic, setTopic] = useState("");
   const [payload, setPayload] = useState('{\n  "message": "Hello World"\n}');
@@ -20,7 +30,9 @@ export function DataSender() {
   const [messagesSent, setMessagesSent] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoopActiveRef = useRef(false);
+  const sequenceByTopicRef = useRef<Map<string, number>>(new Map());
 
   const validateJson = useCallback(
     (text: string): { valid: boolean; error?: string } => {
@@ -37,66 +49,113 @@ export function DataSender() {
     [],
   );
 
-  const jsonValidation = validateJson(payload);
+  const sendMessage = useCallback(
+    async (topicValue: string, payloadValue: string, reliableValue: boolean) => {
+      if (!room?.localParticipant) {
+        setLastError("Not connected to room");
+        return false;
+      }
 
-  const sendMessage = useCallback(async () => {
-    if (!topic.trim()) {
-      setLastError("Topic is required");
-      return;
-    }
+      try {
+        const currentSequence = sequenceByTopicRef.current.get(topicValue) ?? 0;
+        const timestampNs = Date.now() * 1_000_000;
+        const envelope = buildMessageEnvelope(
+          payloadValue,
+          currentSequence,
+          timestampNs,
+        );
+        const data = await encodePayloadByMode(envelope, senderMode);
 
-    if (!jsonValidation.valid) {
-      setLastError(jsonValidation.error || "Invalid JSON");
-      return;
-    }
+        await room.localParticipant.publishData(data, {
+          topic: topicValue,
+          reliable: reliableValue,
+        });
 
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(payload);
+        sequenceByTopicRef.current.set(topicValue, currentSequence + 1);
+        onPublishSuccess?.(topicValue, timestampNs);
+        setMessagesSent((prev) => prev + 1);
+        setLastError(null);
+        return true;
+      } catch (error) {
+        setLastError(
+          error instanceof Error ? error.message : "Failed to send message",
+        );
+        return false;
+      }
+    },
+    [room, senderMode, onPublishSuccess],
+  );
 
-      await room.localParticipant.publishData(data, {
-        topic: topic.trim(),
-        reliable,
-      });
-
-      setMessagesSent((prev) => prev + 1);
-      setLastError(null);
-    } catch {
-      setLastError("Failed to send message");
-    }
-  }, [room, topic, payload, reliable, jsonValidation]);
-
-  const startSending = useCallback(() => {
-    if (!topic.trim()) {
-      setLastError("Topic is required");
-      return;
-    }
-
-    if (!jsonValidation.valid) {
-      setLastError(jsonValidation.error || "Invalid JSON");
-      return;
-    }
-
-    setIsSending(true);
-    setMessagesSent(0);
-    setLastError(null);
-
-    sendMessage();
-
-    if (frequency > 0) {
-      intervalRef.current = setInterval(() => {
-        sendMessage();
-      }, 1000 / frequency);
-    }
-  }, [topic, frequency, jsonValidation, sendMessage]);
-
-  const stopSending = useCallback(() => {
-    setIsSending(false);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const clearScheduledSend = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
   }, []);
+
+  const stopSending = useCallback(() => {
+    isLoopActiveRef.current = false;
+    clearScheduledSend();
+    setIsSending(false);
+  }, [clearScheduledSend]);
+
+  const startSending = useCallback(async () => {
+    if (isLoopActiveRef.current) {
+      return;
+    }
+
+    const topicValue = topic.trim();
+    if (!topicValue) {
+      setLastError("Topic is required");
+      return;
+    }
+
+    const validation = validateJson(payload);
+    if (!validation.valid) {
+      setLastError(validation.error || "Invalid JSON");
+      return;
+    }
+
+    const payloadValue = payload;
+    const reliableValue = reliable;
+
+    if (frequency <= 0) {
+      setMessagesSent(0);
+      await sendMessage(topicValue, payloadValue, reliableValue);
+      return;
+    }
+
+    const intervalMs = Math.max(1, Math.round(1000 / frequency));
+
+    setMessagesSent(0);
+    setLastError(null);
+    isLoopActiveRef.current = true;
+    setIsSending(true);
+
+    const run = async () => {
+      if (!isLoopActiveRef.current) {
+        return;
+      }
+      await sendMessage(topicValue, payloadValue, reliableValue);
+      if (!isLoopActiveRef.current) {
+        return;
+      }
+      timeoutRef.current = setTimeout(() => {
+        void run();
+      }, intervalMs);
+    };
+
+    void run();
+  }, [topic, validateJson, payload, reliable, frequency, sendMessage]);
+
+  useEffect(() => {
+    return () => {
+      isLoopActiveRef.current = false;
+      clearScheduledSend();
+    };
+  }, [clearScheduledSend]);
+
+  const jsonValidation = validateJson(payload);
 
   return (
     <Card className="border-neutral-800 bg-neutral-900">
@@ -131,8 +190,9 @@ export function DataSender() {
               step={0.1}
               value={frequency}
               onChange={(e) => setFrequency(parseFloat(e.target.value) || 0)}
+              onWheel={(e) => (e.target as HTMLInputElement).blur()}
               disabled={isSending}
-              className="border-neutral-700 bg-neutral-800 text-sm"
+              className="border-neutral-700 bg-neutral-800 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
         </div>
@@ -208,7 +268,9 @@ export function DataSender() {
           ) : (
             <Button
               size="sm"
-              onClick={startSending}
+              onClick={() => {
+                void startSending();
+              }}
               disabled={!topic.trim() || !jsonValidation.valid}
               className="gap-1"
             >
