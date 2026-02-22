@@ -1,3 +1,4 @@
 ignoredBuiltDependencies:
+  - cbor-extract
   - sharp
   - unrs-resolver

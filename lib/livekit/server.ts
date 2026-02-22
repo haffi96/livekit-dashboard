@@ -47,7 +47,7 @@ export async function createTokenWithCredentials(
     room: roomName,
     canSubscribe: true,
     canPublish: false, // Viewer only - no publishing
-    canPublishData: false,
+    canPublishData: true, // Allow data channel publishing
   });
 
   return await token.toJwt();

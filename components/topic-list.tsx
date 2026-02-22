@@ -7,7 +7,7 @@ import { TopicStats } from "@/hooks/use-data-topics";
 interface TopicListProps {
   topics: string[];
   selectedTopic: string | null;
-  onSelectTopic: (topic: string) => void;
+  onSelectTopic: (topic: string | null) => void;
   getTopicStats: (topic: string) => TopicStats;
 }
 
@@ -35,7 +35,7 @@ export function TopicList({
         return (
           <button
             key={topic}
-            onClick={() => onSelectTopic(topic)}
+            onClick={() => onSelectTopic(isSelected ? null : topic)}
             className={cn(
               "group relative rounded-lg border p-2 text-left transition-all",
               isSelected

@@ -3,6 +3,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRoomContext } from "@livekit/components-react";
 import { RoomEvent, DataPacket_Kind, RemoteParticipant } from "livekit-client";
+import {
+  decodePayloadByMode,
+  type SerializationMode,
+} from "@/lib/data-serialization";
 
 export interface TopicMessage {
   id: string;
@@ -25,11 +29,17 @@ interface TopicData {
   messages: TopicMessage[];
   stats: TopicStats;
 }
+export interface IncomingTopicActivity {
+  topic: string;
+  stats: TopicStats;
+}
 
 const MAX_MESSAGES_PER_TOPIC = 50;
 const RATE_WINDOW_MS = 5000;
+const MAX_RATE_SAMPLES_PER_TOPIC = 5000;
+const MAX_SIZE_SAMPLES_PER_TOPIC = 100;
 
-export function useDataTopics() {
+export function useDataTopics(receiverMode: SerializationMode) {
   const room = useRoomContext();
   const [topics, setTopics] = useState<Map<string, TopicData>>(new Map());
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -42,10 +52,24 @@ export function useDataTopics() {
     const windowStart = now - RATE_WINDOW_MS;
     const timestamps = messageTimestampsRef.current.get(topic) || [];
 
-    const filteredTimestamps = timestamps.filter((ts) => ts > windowStart);
-    messageTimestampsRef.current.set(topic, filteredTimestamps);
+    let staleCount = 0;
+    while (
+      staleCount < timestamps.length &&
+      timestamps[staleCount] <= windowStart
+    ) {
+      staleCount += 1;
+    }
+    if (staleCount > 0) {
+      timestamps.splice(0, staleCount);
+    }
 
-    return filteredTimestamps.length / (RATE_WINDOW_MS / 1000);
+    if (timestamps.length > MAX_RATE_SAMPLES_PER_TOPIC) {
+      timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TOPIC);
+    }
+
+    messageTimestampsRef.current.set(topic, timestamps);
+
+    return timestamps.length / (RATE_WINDOW_MS / 1000);
   }, []);
 
   const handleMessage = useCallback(
@@ -55,23 +79,44 @@ export function useDataTopics() {
       kind?: DataPacket_Kind,
       topic?: string,
     ) => {
+      void (async () => {
       const topicName = topic || "default";
       const now = Date.now();
-      const decoder = new TextDecoder();
-      const dataString = decoder.decode(payload);
+      let dataString = "";
+      try {
+        dataString = await decodePayloadByMode(payload, receiverMode);
+      } catch (error) {
+        dataString = `[decode error: ${receiverMode}] ${
+          error instanceof Error ? error.message : "Failed to decode payload"
+        }`;
+      }
       const size = payload.byteLength;
 
       const timestamps = messageTimestampsRef.current.get(topicName) || [];
       timestamps.push(now);
+
+      const windowStart = now - RATE_WINDOW_MS;
+      let staleCount = 0;
+      while (
+        staleCount < timestamps.length &&
+        timestamps[staleCount] <= windowStart
+      ) {
+        staleCount += 1;
+      }
+      if (staleCount > 0) {
+        timestamps.splice(0, staleCount);
+      }
+      if (timestamps.length > MAX_RATE_SAMPLES_PER_TOPIC) {
+        timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TOPIC);
+      }
       messageTimestampsRef.current.set(topicName, timestamps);
 
       const sizes = messageSizesRef.current.get(topicName) || [];
       sizes.push(size);
-      if (sizes.length > 100) {
-        messageSizesRef.current.set(topicName, sizes.slice(-100));
-      } else {
-        messageSizesRef.current.set(topicName, sizes);
+      if (sizes.length > MAX_SIZE_SAMPLES_PER_TOPIC) {
+        sizes.splice(0, sizes.length - MAX_SIZE_SAMPLES_PER_TOPIC);
       }
+      messageSizesRef.current.set(topicName, sizes);
 
       const newMessage: TopicMessage = {
         id: `${now}-${Math.random().toString(36).substring(7)}`,
@@ -82,7 +127,7 @@ export function useDataTopics() {
         kind: kind ?? DataPacket_Kind.RELIABLE,
       };
 
-      const currentRate = calculateRate(topicName);
+      const currentRate = timestamps.length / (RATE_WINDOW_MS / 1000);
       const averageSize =
         sizes.length > 0 ? sizes.reduce((a, b) => a + b, 0) / sizes.length : 0;
 
@@ -106,8 +151,9 @@ export function useDataTopics() {
         });
         return newMap;
       });
+      })();
     },
-    [calculateRate],
+    [receiverMode],
   );
 
   useEffect(() => {
@@ -167,9 +213,22 @@ export function useDataTopics() {
   );
 
   const topicList = Array.from(topics.keys()).sort();
+  const incomingTopicActivity: IncomingTopicActivity[] = topicList.map(
+    (topic) => ({
+      topic,
+      stats: topics.get(topic)?.stats ?? {
+        messageCount: 0,
+        currentRate: 0,
+        averageSize: 0,
+        lastReceived: null,
+        lastKind: null,
+      },
+    }),
+  );
 
   return {
     topics: topicList,
+    incomingTopicActivity,
     selectedTopic,
     setSelectedTopic,
     getTopicMessages,
