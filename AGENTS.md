@@ -16,14 +16,14 @@ The dev server runs on `localhost:3000` with Turbopack. The `IRON_SESSION_PASSWO
 
 ### Key commands
 
-| Task | Command |
-|------|---------|
-| Install deps | `pnpm install` |
-| Dev server | `pnpm dev` |
-| Lint (ESLint) | `pnpm lint` |
-| Format check | `pnpm fmt:check` |
-| Format fix | `pnpm fmt` |
-| Build | `pnpm build` |
+| Task          | Command          |
+| ------------- | ---------------- |
+| Install deps  | `pnpm install`   |
+| Dev server    | `pnpm dev`       |
+| Lint (ESLint) | `pnpm lint`      |
+| Format check  | `pnpm fmt:check` |
+| Format fix    | `pnpm fmt`       |
+| Build         | `pnpm build`     |
 
 ### Gotchas
 

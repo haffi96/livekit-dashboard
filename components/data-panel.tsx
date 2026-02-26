@@ -44,7 +44,10 @@ export function DataPanel() {
   } = useDataTopics(receiverMode);
 
   const incomingStatsByTopic = useMemo(() => {
-    const map = new Map<string, (typeof incomingTopicActivity)[number]["stats"]>();
+    const map = new Map<
+      string,
+      (typeof incomingTopicActivity)[number]["stats"]
+    >();
     for (const activity of incomingTopicActivity) {
       map.set(activity.topic, activity.stats);
     }
@@ -53,7 +56,10 @@ export function DataPanel() {
 
   const allTopics = useMemo(() => {
     return Array.from(
-      new Set([...incomingStatsByTopic.keys(), ...outgoingTopicActivity.keys()]),
+      new Set([
+        ...incomingStatsByTopic.keys(),
+        ...outgoingTopicActivity.keys(),
+      ]),
     ).sort();
   }, [incomingStatsByTopic, outgoingTopicActivity]);
 

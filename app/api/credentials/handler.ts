@@ -11,6 +11,14 @@ const CredentialsSchema = z.object({
   apiSecret: z.string().min(1, "API Secret is required"),
 });
 
+function getEnvCredentials() {
+  const url = process.env.LIVEKIT_URL;
+  const apiKey = process.env.LIVEKIT_API_KEY;
+  const apiSecret = process.env.LIVEKIT_API_SECRET;
+  if (url && apiKey && apiSecret) return { url, apiKey, apiSecret };
+  return null;
+}
+
 // POST /api/credentials - Set credentials in session
 credentialsRouter.post("/", async (c) => {
   try {
@@ -52,16 +60,21 @@ credentialsRouter.post("/", async (c) => {
   }
 });
 
-// GET /api/credentials - Check if session has credentials
+// GET /api/credentials - Check if session has credentials.
+// Auto-seeds the session from LIVEKIT_* env vars on first check.
 credentialsRouter.get("/", async (c) => {
   try {
     const session = await getSession();
 
     if (session.credentials) {
-      return c.json({
-        url: session.credentials.url,
-        connected: true,
-      });
+      return c.json({ url: session.credentials.url, connected: true });
+    }
+
+    const env = getEnvCredentials();
+    if (env) {
+      session.credentials = env;
+      await session.save();
+      return c.json({ url: env.url, connected: true });
     }
 
     return c.json({ connected: false });

@@ -80,77 +80,82 @@ export function useDataTopics(receiverMode: SerializationMode) {
       topic?: string,
     ) => {
       void (async () => {
-      const topicName = topic || "default";
-      const now = Date.now();
-      let dataString = "";
-      try {
-        dataString = await decodePayloadByMode(payload, receiverMode);
-      } catch (error) {
-        dataString = `[decode error: ${receiverMode}] ${
-          error instanceof Error ? error.message : "Failed to decode payload"
-        }`;
-      }
-      const size = payload.byteLength;
+        const topicName = topic || "default";
+        const now = Date.now();
+        let dataString = "";
+        try {
+          dataString = await decodePayloadByMode(payload, receiverMode);
+        } catch (error) {
+          dataString = `[decode error: ${receiverMode}] ${
+            error instanceof Error ? error.message : "Failed to decode payload"
+          }`;
+        }
+        const size = payload.byteLength;
 
-      const timestamps = messageTimestampsRef.current.get(topicName) || [];
-      timestamps.push(now);
+        const timestamps = messageTimestampsRef.current.get(topicName) || [];
+        timestamps.push(now);
 
-      const windowStart = now - RATE_WINDOW_MS;
-      let staleCount = 0;
-      while (
-        staleCount < timestamps.length &&
-        timestamps[staleCount] <= windowStart
-      ) {
-        staleCount += 1;
-      }
-      if (staleCount > 0) {
-        timestamps.splice(0, staleCount);
-      }
-      if (timestamps.length > MAX_RATE_SAMPLES_PER_TOPIC) {
-        timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TOPIC);
-      }
-      messageTimestampsRef.current.set(topicName, timestamps);
+        const windowStart = now - RATE_WINDOW_MS;
+        let staleCount = 0;
+        while (
+          staleCount < timestamps.length &&
+          timestamps[staleCount] <= windowStart
+        ) {
+          staleCount += 1;
+        }
+        if (staleCount > 0) {
+          timestamps.splice(0, staleCount);
+        }
+        if (timestamps.length > MAX_RATE_SAMPLES_PER_TOPIC) {
+          timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TOPIC);
+        }
+        messageTimestampsRef.current.set(topicName, timestamps);
 
-      const sizes = messageSizesRef.current.get(topicName) || [];
-      sizes.push(size);
-      if (sizes.length > MAX_SIZE_SAMPLES_PER_TOPIC) {
-        sizes.splice(0, sizes.length - MAX_SIZE_SAMPLES_PER_TOPIC);
-      }
-      messageSizesRef.current.set(topicName, sizes);
+        const sizes = messageSizesRef.current.get(topicName) || [];
+        sizes.push(size);
+        if (sizes.length > MAX_SIZE_SAMPLES_PER_TOPIC) {
+          sizes.splice(0, sizes.length - MAX_SIZE_SAMPLES_PER_TOPIC);
+        }
+        messageSizesRef.current.set(topicName, sizes);
 
-      const newMessage: TopicMessage = {
-        id: `${now}-${Math.random().toString(36).substring(7)}`,
-        timestamp: now,
-        data: dataString,
-        size,
-        participantIdentity: participant?.identity || "unknown",
-        kind: kind ?? DataPacket_Kind.RELIABLE,
-      };
+        const newMessage: TopicMessage = {
+          id: `${now}-${Math.random().toString(36).substring(7)}`,
+          timestamp: now,
+          data: dataString,
+          size,
+          participantIdentity: participant?.identity || "unknown",
+          kind: kind ?? DataPacket_Kind.RELIABLE,
+        };
 
-      const currentRate = timestamps.length / (RATE_WINDOW_MS / 1000);
-      const averageSize =
-        sizes.length > 0 ? sizes.reduce((a, b) => a + b, 0) / sizes.length : 0;
+        const currentRate = timestamps.length / (RATE_WINDOW_MS / 1000);
+        const averageSize =
+          sizes.length > 0
+            ? sizes.reduce((a, b) => a + b, 0) / sizes.length
+            : 0;
 
-      setTopics((prev) => {
-        const newMap = new Map(prev);
-        const existing = newMap.get(topicName);
-        const messages = existing
-          ? [newMessage, ...existing.messages].slice(0, MAX_MESSAGES_PER_TOPIC)
-          : [newMessage];
-        const prevCount = existing?.stats.messageCount || 0;
+        setTopics((prev) => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(topicName);
+          const messages = existing
+            ? [newMessage, ...existing.messages].slice(
+                0,
+                MAX_MESSAGES_PER_TOPIC,
+              )
+            : [newMessage];
+          const prevCount = existing?.stats.messageCount || 0;
 
-        newMap.set(topicName, {
-          messages,
-          stats: {
-            messageCount: prevCount + 1,
-            currentRate,
-            averageSize,
-            lastReceived: now,
-            lastKind: kind ?? null,
-          },
+          newMap.set(topicName, {
+            messages,
+            stats: {
+              messageCount: prevCount + 1,
+              currentRate,
+              averageSize,
+              lastReceived: now,
+              lastKind: kind ?? null,
+            },
+          });
+          return newMap;
         });
-        return newMap;
-      });
       })();
     },
     [receiverMode],

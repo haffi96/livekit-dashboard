@@ -50,7 +50,11 @@ export function DataSender({ senderMode, onPublishSuccess }: DataSenderProps) {
   );
 
   const sendMessage = useCallback(
-    async (topicValue: string, payloadValue: string, reliableValue: boolean) => {
+    async (
+      topicValue: string,
+      payloadValue: string,
+      reliableValue: boolean,
+    ) => {
       if (!room?.localParticipant) {
         setLastError("Not connected to room");
         return false;
@@ -192,7 +196,7 @@ export function DataSender({ senderMode, onPublishSuccess }: DataSenderProps) {
               onChange={(e) => setFrequency(parseFloat(e.target.value) || 0)}
               onWheel={(e) => (e.target as HTMLInputElement).blur()}
               disabled={isSending}
-              className="border-neutral-700 bg-neutral-800 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="[appearance:textfield] border-neutral-700 bg-neutral-800 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
         </div>
