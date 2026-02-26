@@ -31,8 +31,9 @@ export function DvrTimeline({
 }: DvrTimelineProps) {
   const [isDragging, setIsDragging] = useState(false);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 100;
-  const behindLive = duration - currentTime;
+  const effectiveCurrentTime = isAtLiveEdge ? duration : currentTime;
+  const progress = duration > 0 ? (effectiveCurrentTime / duration) * 100 : 100;
+  const behindLive = duration - effectiveCurrentTime;
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,8 +48,8 @@ export function DvrTimeline({
   return (
     <div className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-2">
       {/* Time position */}
-      <span className="min-w-[3rem] text-xs text-neutral-400 tabular-nums">
-        {formatTime(currentTime)}
+      <span className="min-w-12 text-xs text-neutral-400 tabular-nums">
+        {formatTime(effectiveCurrentTime)}
       </span>
 
       {/* Scrubber */}
@@ -76,7 +77,7 @@ export function DvrTimeline({
       </div>
 
       {/* Duration */}
-      <span className="min-w-[3rem] text-right text-xs text-neutral-400 tabular-nums">
+      <span className="min-w-12 text-right text-xs text-neutral-400 tabular-nums">
         {formatTime(duration)}
       </span>
 

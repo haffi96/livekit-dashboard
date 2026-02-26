@@ -48,7 +48,7 @@ export function VideoGrid({ tileSize = "medium" }: VideoGridProps) {
   return (
     <div
       className={cn(
-        "grid gap-4 transition-all duration-300",
+        "grid gap-4",
         gridClasses[tileSize],
       )}
     >

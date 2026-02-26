@@ -20,17 +20,31 @@ export function HlsPlayer({
 }: HlsPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const onTimeUpdateRef = useRef<HlsPlayerProps["onTimeUpdate"]>(onTimeUpdate);
+  const onLiveEdgeRef = useRef<HlsPlayerProps["onLiveEdge"]>(onLiveEdge);
+  const lastLiveEdgeRef = useRef<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onTimeUpdate]);
+
+  useEffect(() => {
+    onLiveEdgeRef.current = onLiveEdge;
+  }, [onLiveEdge]);
 
   const checkLiveEdge = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !onLiveEdge) return;
+    if (!video || !onLiveEdgeRef.current) return;
     const buffered = video.buffered;
     if (buffered.length === 0) return;
     const end = buffered.end(buffered.length - 1);
     const isAtLive = end - video.currentTime < 2;
-    onLiveEdge(isAtLive);
-  }, [onLiveEdge]);
+    if (lastLiveEdgeRef.current !== isAtLive) {
+      lastLiveEdgeRef.current = isAtLive;
+      onLiveEdgeRef.current(isAtLive);
+    }
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -77,8 +91,8 @@ export function HlsPlayer({
     });
 
     const handleTimeUpdate = () => {
-      if (onTimeUpdate && video.duration) {
-        onTimeUpdate(video.currentTime, video.duration);
+      if (onTimeUpdateRef.current && video.duration) {
+        onTimeUpdateRef.current(video.currentTime, video.duration);
       }
       checkLiveEdge();
     };
@@ -90,7 +104,7 @@ export function HlsPlayer({
       hls.destroy();
       hlsRef.current = null;
     };
-  }, [src, onTimeUpdate, checkLiveEdge]);
+  }, [src, checkLiveEdge]);
 
   useEffect(() => {
     if (seekTo !== null && seekTo !== undefined && videoRef.current) {
