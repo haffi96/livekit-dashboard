@@ -24,10 +24,18 @@ function getGcsConfig(): { bucket: string; credentials: string } | null {
 
 async function getEgressClient(): Promise<EgressClient> {
   const session = await getSession();
-  const creds = session.credentials;
+  const creds = session.credentials ?? getEnvCredentials();
   if (!creds) throw new Error("Not authenticated");
 
   return new EgressClient(toHttpUrl(creds.url), creds.apiKey, creds.apiSecret);
+}
+
+function getEnvCredentials() {
+  const url = process.env.LIVEKIT_URL;
+  const apiKey = process.env.LIVEKIT_API_KEY;
+  const apiSecret = process.env.LIVEKIT_API_SECRET;
+  if (url && apiKey && apiSecret) return { url, apiKey, apiSecret };
+  return null;
 }
 
 function gcsUpload(): GCPUpload {
