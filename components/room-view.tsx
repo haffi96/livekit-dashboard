@@ -10,6 +10,9 @@ import {
 import { ConnectionState } from "livekit-client";
 import { VideoGrid, type TileSize } from "./video-grid";
 import { DataPanel } from "./data-panel";
+import { RecordingControls } from "./recording-controls";
+import { HlsPlayer } from "./hls-player";
+import { DvrTimeline } from "./dvr-timeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,6 +38,71 @@ function RoomContent({ roomName }: { roomName: string }) {
   const connectionState = useConnectionState();
   const [showDataPanel, setShowDataPanel] = useState(false);
   const [tileSize, setTileSize] = useState<TileSize>("medium");
+
+  // DVR state
+  const [isRecording, setIsRecording] = useState(false);
+  const [hlsPrefix, setHlsPrefix] = useState<string | null>(null);
+  const [isAtLiveEdge, setIsAtLiveEdge] = useState(true);
+  const [hlsCurrentTime, setHlsCurrentTime] = useState(0);
+  const [hlsDuration, setHlsDuration] = useState(0);
+  const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [showRewind, setShowRewind] = useState(false);
+
+  const hlsSrc = hlsPrefix
+    ? `/api/egress/gcs?path=${encodeURIComponent(hlsPrefix + "/live.m3u8")}`
+    : null;
+
+  const pollForPlaylist = useCallback(async () => {
+    const prefix = `recordings/${roomName}/`;
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) {
+        clearInterval(interval);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/egress/gcs/list?prefix=${encodeURIComponent(prefix)}`,
+        );
+        const data = await res.json();
+        const livePlaylists = (data.playlists as string[])?.filter(
+          (p: string) => p.endsWith("live.m3u8"),
+        );
+        if (livePlaylists && livePlaylists.length > 0) {
+          const latest = livePlaylists[livePlaylists.length - 1];
+          const dir = latest.replace("/live.m3u8", "");
+          setHlsPrefix(dir);
+          clearInterval(interval);
+        }
+      } catch {
+        // keep polling
+      }
+    }, 3000);
+  }, [roomName]);
+
+  const handleRecordingStarted = useCallback(() => {
+    setIsRecording(true);
+    pollForPlaylist();
+  }, [pollForPlaylist]);
+
+  const handleRecordingStopped = useCallback(() => {
+    setIsRecording(false);
+    setShowRewind(false);
+    setHlsPrefix(null);
+  }, []);
+
+  const handleSeek = useCallback((time: number) => {
+    setSeekTarget(time);
+    setShowRewind(true);
+    setIsAtLiveEdge(false);
+  }, []);
+
+  const handleGoLive = useCallback(() => {
+    setShowRewind(false);
+    setIsAtLiveEdge(true);
+    setSeekTarget(null);
+  }, []);
 
   const getConnectionBadge = () => {
     switch (connectionState) {
@@ -96,6 +164,12 @@ function RoomContent({ roomName }: { roomName: string }) {
               {getConnectionBadge()}
             </div>
             <div className="flex items-center gap-2">
+              {/* Recording Controls */}
+              <RecordingControls
+                roomName={roomName}
+                onRecordingStarted={handleRecordingStarted}
+                onRecordingStopped={handleRecordingStopped}
+              />
               {/* Tile Size Controls */}
               <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">
                 {tileSizeOptions.map((option) => (
@@ -137,12 +211,51 @@ function RoomContent({ roomName }: { roomName: string }) {
             showDataPanel ? "lg:grid-cols-3" : "lg:grid-cols-1",
           )}
         >
-          {/* Video Grid */}
+          {/* Video Grid / HLS Rewind */}
           <div
             className={cn(showDataPanel ? "lg:col-span-2" : "lg:col-span-1")}
           >
             <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
-            <VideoGrid tileSize={tileSize} />
+
+            {/* Show HLS rewind player when scrubbing back */}
+            {showRewind && hlsSrc ? (
+              <div className="relative">
+                <Badge
+                  variant="secondary"
+                  className="absolute top-2 left-2 z-10"
+                >
+                  Rewind
+                </Badge>
+                <HlsPlayer
+                  src={hlsSrc}
+                  seekTo={seekTarget}
+                  onTimeUpdate={(t, d) => {
+                    setHlsCurrentTime(t);
+                    setHlsDuration(d);
+                  }}
+                  onLiveEdge={(live) => {
+                    if (live) handleGoLive();
+                  }}
+                  className="aspect-video w-full rounded-lg bg-black"
+                />
+              </div>
+            ) : (
+              <VideoGrid tileSize={tileSize} />
+            )}
+
+            {/* DVR Timeline */}
+            {isRecording && hlsSrc && (
+              <div className="mt-4">
+                <DvrTimeline
+                  currentTime={hlsCurrentTime}
+                  duration={hlsDuration}
+                  isAtLiveEdge={isAtLiveEdge}
+                  isRecording={isRecording}
+                  onSeek={handleSeek}
+                  onGoLive={handleGoLive}
+                />
+              </div>
+            )}
           </div>
 
           {/* Data Panel */}
