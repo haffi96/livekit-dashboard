@@ -43,6 +43,69 @@ pnpm dev
    - **API Key**: Your LiveKit API key
    - **API Secret**: Your LiveKit API secret
 
+## Environment Variables
+
+| Variable                | Required | Description                                                   |
+| ----------------------- | -------- | ------------------------------------------------------------- |
+| `IRON_SESSION_PASSWORD` | Yes      | 32+ character secret for encrypting session cookies           |
+| `LIVEKIT_URL`           | No       | LiveKit server WebSocket URL — auto-seeds the credential form |
+| `LIVEKIT_API_KEY`       | No       | LiveKit API key — auto-seeds the credential form              |
+| `LIVEKIT_API_SECRET`    | No       | LiveKit API secret — auto-seeds the credential form           |
+
+When all three `LIVEKIT_*` variables are set the dashboard skips the credentials form and connects automatically.
+
+## Testing with GStreamer
+
+You can publish a test H264 video stream to a LiveKit room using GStreamer and the [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/).
+
+### Prerequisites
+
+```bash
+# GStreamer (Ubuntu/Debian)
+sudo apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-base \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav
+
+# LiveKit CLI
+curl -sSL https://get.livekit.io/cli | bash
+```
+
+### 1. Create a room
+
+```bash
+export LIVEKIT_URL=wss://your-server.livekit.cloud
+export LIVEKIT_API_KEY=your-api-key
+export LIVEKIT_API_SECRET=your-api-secret
+
+lk room create --name my-room
+```
+
+### 2. Start a GStreamer H264 pipeline
+
+This launches a test pattern (bouncing ball + timestamp) encoded as H264 and served over TCP:
+
+```bash
+gst-launch-1.0 videotestsrc pattern=ball is-live=true \
+  ! video/x-raw,width=1280,height=720,framerate=30/1 \
+  ! timeoverlay \
+  ! x264enc bitrate=2000 speed-preset=ultrafast key-int-max=30 \
+  ! video/x-h264,stream-format=byte-stream \
+  ! tcpserversink host=127.0.0.1 port=5000
+```
+
+### 3. Publish to LiveKit
+
+In a second terminal, consume the TCP stream and publish it as a camera track:
+
+```bash
+lk room join --identity gstreamer-publisher \
+  --publish "h264://127.0.0.1:5000" --fps 30 my-room
+```
+
+### 4. View in the dashboard
+
+Open `http://localhost:3000`, find the room, and click **Join Room** to see the live video feed with WebRTC stats.
+
 ## Security
 
 - **Session Storage Only**: Credentials are stored in your browser's session storage
