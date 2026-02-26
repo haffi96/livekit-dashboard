@@ -73,7 +73,11 @@ gcsRouter.get("/", async (c) => {
       contentType = "video/mp4";
     }
 
-    let body: Uint8Array | string = new Uint8Array(contents);
+    const binary = new Uint8Array(contents);
+    let body: BodyInit = binary.buffer.slice(
+      binary.byteOffset,
+      binary.byteOffset + binary.byteLength,
+    );
 
     // Rewrite .m3u8 segment references to go through this proxy
     if (objectPath.endsWith(".m3u8")) {
