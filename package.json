@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.9.0",
   "scripts": {
     "dev": "next dev --turbopack",
+    "stream": "./scripts/stream-h264.sh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

@@ -22,6 +22,10 @@ A Next.js application for monitoring and connecting to LiveKit rooms. View camer
 - pnpm
 - A LiveKit server (cloud or self-hosted)
 
+### Streaming H.264 with GStreamer
+
+To publish test streams to LiveKit rooms, see **[docs/STREAMING.md](./docs/STREAMING.md)** for GStreamer + LiveKit CLI setup.
+
 ## Setup
 
 1. Clone the repository and install dependencies:
