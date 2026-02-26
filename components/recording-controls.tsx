@@ -18,8 +18,8 @@ interface EgressItem {
 }
 
 // EgressStatus enum values from LiveKit proto
-const EGRESS_ACTIVE = 0;
-const EGRESS_STARTING = 4;
+const EGRESS_STARTING = 0;
+const EGRESS_ACTIVE = 1;
 
 export function RecordingControls({
   roomName,
