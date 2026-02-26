@@ -47,7 +47,18 @@ gcsRouter.get("/", async (c) => {
       contentType = "video/mp4";
     }
 
-    return new Response(new Uint8Array(contents), {
+    let body: Uint8Array | string = new Uint8Array(contents);
+
+    // Rewrite .m3u8 segment references to go through this proxy
+    if (objectPath.endsWith(".m3u8")) {
+      const dir = objectPath.substring(0, objectPath.lastIndexOf("/") + 1);
+      const text = contents.toString("utf-8");
+      body = text.replace(/^(seg_[^\s]+\.ts)$/gm, (seg) => {
+        return `/api/egress/gcs?path=${encodeURIComponent(dir + seg)}`;
+      });
+    }
+
+    return new Response(body, {
       headers: {
         "Content-Type": contentType,
         "Cache-Control":
@@ -70,7 +81,6 @@ gcsRouter.get("/list", async (c) => {
     const storage = getStorage();
     const [files] = await storage.bucket(getBucket()).getFiles({
       prefix,
-      delimiter: "/",
     });
 
     const playlists = files
