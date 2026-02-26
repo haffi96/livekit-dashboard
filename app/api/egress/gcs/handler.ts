@@ -1,12 +1,38 @@
 import { Hono } from "hono";
 import { Storage } from "@google-cloud/storage";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 
 export const gcsRouter = new Hono();
 
 function getStorage(): Storage {
-  const credentials = process.env.GCS_CREDENTIALS;
-  if (!credentials) throw new Error("GCS_CREDENTIALS not set");
-  return new Storage({ credentials: JSON.parse(credentials) });
+  const options = getStorageAuthOptions();
+  return new Storage(options);
+}
+
+function expandHomePath(path: string): string {
+  if (path.startsWith("~/")) {
+    return resolve(homedir(), path.slice(2));
+  }
+  return path;
+}
+
+function getStorageAuthOptions():
+  | { credentials: Record<string, unknown> }
+  | { keyFilename: string } {
+  const raw = process.env.GCS_CREDENTIALS;
+  if (!raw) throw new Error("GCS_CREDENTIALS not set");
+
+  const value = raw.trim();
+  if (value.startsWith("{")) {
+    return { credentials: JSON.parse(value) as Record<string, unknown> };
+  }
+
+  const keyFilename = expandHomePath(value);
+  // Validate file readability early for clearer API errors.
+  readFileSync(keyFilename, "utf8");
+  return { keyFilename };
 }
 
 function getBucket(): string {

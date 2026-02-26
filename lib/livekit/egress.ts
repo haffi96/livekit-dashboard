@@ -7,6 +7,9 @@ import {
   EncodedFileOutput,
   EncodedFileType,
 } from "livekit-server-sdk";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { getSession } from "@/lib/session";
 
 function toHttpUrl(url: string): string {
@@ -17,9 +20,33 @@ function toHttpUrl(url: string): string {
 
 function getGcsConfig(): { bucket: string; credentials: string } | null {
   const bucket = process.env.GCS_BUCKET;
-  const credentials = process.env.GCS_CREDENTIALS;
+  const credentials = resolveGcsCredentials();
   if (bucket && credentials) return { bucket, credentials };
   return null;
+}
+
+function expandHomePath(path: string): string {
+  if (path.startsWith("~/")) {
+    return resolve(homedir(), path.slice(2));
+  }
+  return path;
+}
+
+function resolveGcsCredentials(): string | undefined {
+  const raw = process.env.GCS_CREDENTIALS;
+  if (!raw) return undefined;
+
+  const value = raw.trim();
+  if (value.startsWith("{")) {
+    // Validate JSON early to avoid runtime errors when starting egress.
+    JSON.parse(value);
+    return value;
+  }
+
+  const filePath = expandHomePath(value);
+  const fileContents = readFileSync(filePath, "utf8").trim();
+  JSON.parse(fileContents);
+  return fileContents;
 }
 
 async function getEgressClient(): Promise<EgressClient> {

@@ -34,6 +34,8 @@ interface RoomViewProps {
   roomName: string;
 }
 
+type PlaybackMode = "webrtc_live" | "hls_live_window" | "hls_extended";
+
 function RoomContent({ roomName }: { roomName: string }) {
   const connectionState = useConnectionState();
   const [showDataPanel, setShowDataPanel] = useState(false);
@@ -42,15 +44,25 @@ function RoomContent({ roomName }: { roomName: string }) {
   // DVR state
   const [isRecording, setIsRecording] = useState(false);
   const [hlsPrefix, setHlsPrefix] = useState<string | null>(null);
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("webrtc_live");
   const [isAtLiveEdge, setIsAtLiveEdge] = useState(true);
   const [hlsCurrentTime, setHlsCurrentTime] = useState(0);
   const [hlsDuration, setHlsDuration] = useState(0);
+  const [liveWindowDuration, setLiveWindowDuration] = useState(0);
+  const [pendingBehindLive, setPendingBehindLive] = useState<number | null>(
+    null,
+  );
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
-  const [showRewind, setShowRewind] = useState(false);
+  const isHlsMode = playbackMode !== "webrtc_live";
 
-  const hlsSrc = hlsPrefix
+  const hlsLiveSrc = hlsPrefix
     ? `/api/egress/gcs?path=${encodeURIComponent(hlsPrefix + "/live.m3u8")}`
     : null;
+  const hlsPlaylistSrc = hlsPrefix
+    ? `/api/egress/gcs?path=${encodeURIComponent(hlsPrefix + "/playlist.m3u8")}`
+    : null;
+  const activeHlsSrc =
+    playbackMode === "hls_extended" ? hlsPlaylistSrc : hlsLiveSrc;
 
   const pollForPlaylist = useCallback(async () => {
     const prefix = `recordings/${roomName}/`;
@@ -88,20 +100,62 @@ function RoomContent({ roomName }: { roomName: string }) {
 
   const handleRecordingStopped = useCallback(() => {
     setIsRecording(false);
-    setShowRewind(false);
+    setPlaybackMode("webrtc_live");
     setHlsPrefix(null);
+    setSeekTarget(null);
+    setPendingBehindLive(null);
+    setLiveWindowDuration(0);
+    setHlsCurrentTime(0);
+    setHlsDuration(0);
   }, []);
 
   const handleSeek = useCallback((time: number) => {
+    if (playbackMode === "webrtc_live") {
+      setPlaybackMode("hls_live_window");
+      setSeekTarget(time);
+      setPendingBehindLive(null);
+      setIsAtLiveEdge(false);
+      return;
+    }
+
+    if (playbackMode === "hls_live_window") {
+      const atOldestPoint = time <= Math.max(1, liveWindowDuration * 0.02);
+      if (atOldestPoint && hlsPlaylistSrc) {
+        const requestedBehindLive = Math.max(0, liveWindowDuration - time);
+        setPendingBehindLive(requestedBehindLive);
+        setPlaybackMode("hls_extended");
+        setSeekTarget(null);
+        setIsAtLiveEdge(false);
+        return;
+      }
+    }
+
     setSeekTarget(time);
-    setShowRewind(true);
     setIsAtLiveEdge(false);
-  }, []);
+  }, [playbackMode, liveWindowDuration, hlsPlaylistSrc]);
 
   const handleGoLive = useCallback(() => {
-    setShowRewind(false);
+    setPlaybackMode("webrtc_live");
     setIsAtLiveEdge(true);
+    setHlsCurrentTime((prev) => (hlsDuration > 0 ? hlsDuration : prev));
     setSeekTarget(null);
+    setPendingBehindLive(null);
+  }, [hlsDuration]);
+
+  const handleHlsTimeUpdate = useCallback((time: number, duration: number) => {
+    setHlsCurrentTime(time);
+    setHlsDuration(duration);
+    if (playbackMode === "hls_live_window") {
+      setLiveWindowDuration(duration);
+    }
+    if (playbackMode === "hls_extended" && pendingBehindLive !== null) {
+      setSeekTarget(Math.max(0, duration - pendingBehindLive));
+      setPendingBehindLive(null);
+    }
+  }, [playbackMode, pendingBehindLive]);
+
+  const handleHlsLiveEdge = useCallback((live: boolean) => {
+    setIsAtLiveEdge((prev) => (prev === live ? prev : live));
   }, []);
 
   const getConnectionBadge = () => {
@@ -146,6 +200,12 @@ function RoomContent({ roomName }: { roomName: string }) {
     { value: "medium", label: "Medium", icon: <Square className="h-4 w-4" /> },
     { value: "large", label: "Large", icon: <Maximize2 className="h-4 w-4" /> },
   ];
+
+  const rewindSizeClasses: Record<TileSize, string> = {
+    small: "w-full sm:w-1/3 md:w-1/4 lg:w-1/5",
+    medium: "w-full sm:w-1/2 lg:w-1/3",
+    large: "w-full lg:w-1/2",
+  };
 
   return (
     <div className="min-h-screen p-8">
@@ -207,7 +267,7 @@ function RoomContent({ roomName }: { roomName: string }) {
         {/* Main Content */}
         <div
           className={cn(
-            "grid gap-8 transition-all duration-300",
+            "grid gap-8",
             showDataPanel ? "lg:grid-cols-3" : "lg:grid-cols-1",
           )}
         >
@@ -218,24 +278,28 @@ function RoomContent({ roomName }: { roomName: string }) {
             <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
 
             {/* Show HLS rewind player when scrubbing back */}
-            {showRewind && hlsSrc ? (
-              <div className="relative">
-                <Badge
-                  variant="secondary"
-                  className="absolute top-2 left-2 z-10"
-                >
-                  Rewind
-                </Badge>
+            {isHlsMode && activeHlsSrc ? (
+              <div
+                className={cn(
+                  "relative",
+                  rewindSizeClasses[tileSize],
+                )}
+              >
+                <div className="mb-2">
+                  <Badge
+                    variant="secondary"
+                    className="h-5 px-2 text-[10px] tracking-wide uppercase"
+                  >
+                    {playbackMode === "hls_extended"
+                      ? "Rewind (Extended)"
+                      : "Rewind"}
+                  </Badge>
+                </div>
                 <HlsPlayer
-                  src={hlsSrc}
+                  src={activeHlsSrc}
                   seekTo={seekTarget}
-                  onTimeUpdate={(t, d) => {
-                    setHlsCurrentTime(t);
-                    setHlsDuration(d);
-                  }}
-                  onLiveEdge={(live) => {
-                    if (live) handleGoLive();
-                  }}
+                  onTimeUpdate={handleHlsTimeUpdate}
+                  onLiveEdge={handleHlsLiveEdge}
                   className="aspect-video w-full rounded-lg bg-black"
                 />
               </div>
@@ -244,7 +308,7 @@ function RoomContent({ roomName }: { roomName: string }) {
             )}
 
             {/* DVR Timeline */}
-            {isRecording && hlsSrc && (
+            {isRecording && hlsPrefix && (
               <div className="mt-4">
                 <DvrTimeline
                   currentTime={hlsCurrentTime}
