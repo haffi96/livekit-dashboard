@@ -62,6 +62,7 @@ function RoomContent({ roomName }: { roomName: string }) {
   const [showDataPanel, setShowDataPanel] = useState(false);
   const [tileSize, setTileSize] = useState<TileSize>("medium");
   const [historyNow, setHistoryNow] = useState<number>(() => Date.now());
+  const [historyWindowHours, setHistoryWindowHours] = useState(12);
 
   // DVR state
   const [isRecording, setIsRecording] = useState(false);
@@ -430,8 +431,10 @@ function RoomContent({ roomName }: { roomName: string }) {
                 <RecordingHistoryTimeline
                   sessions={recordingSessions}
                   activeSessionId={activeRecordingSessionId}
+                  windowHours={historyWindowHours}
                   nowTimestamp={historyNow}
                   onSelectTimestamp={handleHistorySelect}
+                  onWindowHoursChange={setHistoryWindowHours}
                 />
               </div>
             )}
