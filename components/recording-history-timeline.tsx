@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RecordingSession } from "@/lib/recording-session";
 
@@ -10,12 +11,25 @@ interface RecordingHistoryTimelineProps {
   windowHours?: number;
   nowTimestamp: number;
   onSelectTimestamp?: (timestampSecondsBehindLive: number) => void;
+  onWindowHoursChange?: (windowHours: number) => void;
 }
+
+const zoomOptions = [12, 6, 3, 1] as const;
 
 function formatAxisTime(timestamp: number): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+  }).format(timestamp);
+}
+
+function formatTooltipTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   }).format(timestamp);
 }
 
@@ -33,8 +47,13 @@ export function RecordingHistoryTimeline({
   windowHours = 12,
   nowTimestamp,
   onSelectTimestamp,
+  onWindowHoursChange,
 }: RecordingHistoryTimelineProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<{
+    left: number;
+    timestamp: number;
+  } | null>(null);
   const windowMs = windowHours * 60 * 60 * 1000;
   const windowStart = nowTimestamp - windowMs;
   const tickCount = windowHours;
@@ -104,24 +123,70 @@ export function RecordingHistoryTimeline({
     onSelectTimestamp(Math.max(0, (nowTimestamp - clickedTime) / 1000));
   }
 
+  function handleSegmentHover(
+    event: React.MouseEvent<HTMLButtonElement>,
+    session: RecordingSession,
+    sessionEnd: number,
+  ) {
+    if (!trackRef.current) return;
+
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const hoveredTime = clamp(
+      windowStart + ratio * windowMs,
+      session.startedAt,
+      sessionEnd,
+    );
+
+    setHoveredPoint({
+      left: ratio * 100,
+      timestamp: hoveredTime,
+    });
+  }
+
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-medium text-neutral-100">
-            Recording History
+            Timeline
           </h3>
           <p className="text-xs text-neutral-400">
-            Last {windowHours} hours, ending at now
+            Last {windowHours} hours
           </p>
         </div>
-        <span className="text-xs text-neutral-500">
-          {visibleSessions.length} visible
-        </span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">
+            {zoomOptions.map((option) => (
+              <Button
+                key={option}
+                type="button"
+                variant={windowHours === option ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => onWindowHoursChange?.(option)}
+                className="h-7 px-2 text-[11px]"
+              >
+                {option}h
+              </Button>
+            ))}
+          </div>
+          <span className="text-xs text-neutral-500">
+            {visibleSessions.length} visible
+          </span>
+        </div>
       </div>
 
       <div className="relative">
         <div ref={trackRef} className="relative h-10">
+          {hoveredPoint ? (
+            <div
+              className="pointer-events-none absolute -top-10 z-10 -translate-x-1/2 rounded-md border border-neutral-700 bg-neutral-950/95 px-2 py-1 text-[10px] text-neutral-100 shadow-lg"
+              style={{ left: `${hoveredPoint.left}%` }}
+            >
+              {formatTooltipTime(hoveredPoint.timestamp)}
+            </div>
+          ) : null}
+
           <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-neutral-700" />
 
           {ticks.map((tick) => (
@@ -151,6 +216,13 @@ export function RecordingHistoryTimeline({
                 onClick={(event) =>
                   handleSegmentClick(event, session, sessionEnd)
                 }
+                onMouseMove={(event) =>
+                  handleSegmentHover(event, session, sessionEnd)
+                }
+                onMouseEnter={(event) =>
+                  handleSegmentHover(event, session, sessionEnd)
+                }
+                onMouseLeave={() => setHoveredPoint(null)}
                 className={cn(
                   "absolute top-1/2 h-3 -translate-y-1/2 rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80",
                   isActive
