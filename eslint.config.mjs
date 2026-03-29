@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "rewinds/**",
   ]),
   {
     ignores: [
@@ -20,6 +21,7 @@ const eslintConfig = defineConfig([
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "rewinds/**",
     ],
   },
 ]);

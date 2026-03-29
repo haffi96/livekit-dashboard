@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTracks } from "@livekit/components-react";
+import { useTracks, type TrackReference } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { VideoTile } from "./video-tile";
 import { Video } from "lucide-react";
@@ -11,6 +11,7 @@ export type TileSize = "small" | "medium" | "large";
 
 interface VideoGridProps {
   tileSize?: TileSize;
+  trackRefs?: TrackReference[];
 }
 
 const gridClasses: Record<TileSize, string> = {
@@ -19,17 +20,22 @@ const gridClasses: Record<TileSize, string> = {
   large: "grid-cols-1 lg:grid-cols-2",
 };
 
-export function VideoGrid({ tileSize = "medium" }: VideoGridProps) {
+export function getVideoGridClasses(tileSize: TileSize): string {
+  return gridClasses[tileSize];
+}
+
+export function VideoGrid({
+  tileSize = "medium",
+  trackRefs,
+}: VideoGridProps) {
   const [showStats, setShowStats] = useState(false);
 
   // Get all video tracks from participants
-  const tracks = useTracks([Track.Source.Camera], {
+  const liveTracks = useTracks([Track.Source.Camera], {
     onlySubscribed: true,
   });
 
-  // Filter to only show tracks that are not from the local participant
-  // (since local participant doesn't publish, this will show all camera feeds)
-  const videoTracks = tracks.filter(
+  const videoTracks = (trackRefs ?? liveTracks).filter(
     (trackRef) => trackRef.publication?.track !== undefined,
   );
 
@@ -49,7 +55,7 @@ export function VideoGrid({ tileSize = "medium" }: VideoGridProps) {
     <div
       className={cn(
         "grid gap-4",
-        gridClasses[tileSize],
+        getVideoGridClasses(tileSize),
       )}
     >
       {videoTracks.map((trackRef) => (

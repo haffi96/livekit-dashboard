@@ -23,7 +23,10 @@ export function HlsPlayer({
   const onTimeUpdateRef = useRef<HlsPlayerProps["onTimeUpdate"]>(onTimeUpdate);
   const onLiveEdgeRef = useRef<HlsPlayerProps["onLiveEdge"]>(onLiveEdge);
   const lastLiveEdgeRef = useRef<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    src: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     onTimeUpdateRef.current = onTimeUpdate;
@@ -50,13 +53,29 @@ export function HlsPlayer({
     const video = videoRef.current;
     if (!video || !src) return;
 
+    const handleTimeUpdate = () => {
+      if (onTimeUpdateRef.current && video.duration) {
+        onTimeUpdateRef.current(video.currentTime, video.duration);
+      }
+      checkLiveEdge();
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+
     if (!Hls.isSupported()) {
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = src;
         video.play().catch(() => {});
-        return;
+        return () => {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+          video.removeEventListener("timeupdate", handleTimeUpdate);
+        };
       }
-      return;
+      return () => {
+        video.removeEventListener("timeupdate", handleTimeUpdate);
+      };
     }
 
     const hls = new Hls({
@@ -84,20 +103,14 @@ export function HlsPlayer({
             hls.recoverMediaError();
             break;
           default:
-            setError(`Playback error: ${data.details}`);
+            setError({
+              src,
+              message: `Playback error: ${data.details}`,
+            });
             break;
         }
       }
     });
-
-    const handleTimeUpdate = () => {
-      if (onTimeUpdateRef.current && video.duration) {
-        onTimeUpdateRef.current(video.currentTime, video.duration);
-      }
-      checkLiveEdge();
-    };
-
-    video.addEventListener("timeupdate", handleTimeUpdate);
 
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
@@ -112,10 +125,10 @@ export function HlsPlayer({
     }
   }, [seekTo]);
 
-  if (error) {
+  if (error?.src === src) {
     return (
       <div className="flex items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 p-4">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">{error.message}</p>
       </div>
     );
   }
