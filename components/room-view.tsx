@@ -6,13 +6,15 @@ import {
   RoomAudioRenderer,
   ConnectionStateToast,
   useConnectionState,
+  useTracks,
 } from "@livekit/components-react";
-import { ConnectionState } from "livekit-client";
+import { ConnectionState, Track } from "livekit-client";
 import { VideoGrid, type TileSize } from "./video-grid";
 import { DataPanel } from "./data-panel";
 import { RecordingControls } from "./recording-controls";
-import { HlsPlayer } from "./hls-player";
+import { ReplayGrid } from "./replay-grid";
 import { DvrTimeline } from "./dvr-timeline";
+import { RecordingHistoryTimeline } from "./recording-history-timeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,6 +31,10 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useCredentials } from "@/lib/credentials/context";
+import type {
+  RecordingSession,
+  RecordingTrackInput,
+} from "@/lib/recording-session";
 
 interface RoomViewProps {
   roomName: string;
@@ -36,14 +42,35 @@ interface RoomViewProps {
 
 type PlaybackMode = "webrtc_live" | "hls_live_window" | "hls_extended";
 
+async function fetchRecordingSessionsForRoom(roomName: string) {
+  const response = await fetch(
+    `/api/egress/sessions?roomName=${encodeURIComponent(roomName)}`,
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error ?? "Failed to load recording sessions");
+  }
+
+  return (data.sessions as RecordingSession[]) ?? [];
+}
+
 function RoomContent({ roomName }: { roomName: string }) {
   const connectionState = useConnectionState();
+  const liveCameraTracks = useTracks([Track.Source.Camera], {
+    onlySubscribed: true,
+  }).filter((trackRef) => trackRef.publication?.track !== undefined);
   const [showDataPanel, setShowDataPanel] = useState(false);
   const [tileSize, setTileSize] = useState<TileSize>("medium");
+  const [historyNow, setHistoryNow] = useState<number>(() => Date.now());
 
   // DVR state
   const [isRecording, setIsRecording] = useState(false);
-  const [hlsPrefix, setHlsPrefix] = useState<string | null>(null);
+  const [recordingSession, setRecordingSession] =
+    useState<RecordingSession | null>(null);
+  const [recordingSessions, setRecordingSessions] = useState<RecordingSession[]>(
+    [],
+  );
+  const [readyPlaybackKey, setReadyPlaybackKey] = useState<string | null>(null);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("webrtc_live");
   const [isAtLiveEdge, setIsAtLiveEdge] = useState(true);
   const [hlsCurrentTime, setHlsCurrentTime] = useState(0);
@@ -54,73 +81,140 @@ function RoomContent({ roomName }: { roomName: string }) {
   );
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const isHlsMode = playbackMode !== "webrtc_live";
-
-  const hlsLiveSrc = hlsPrefix
-    ? `/api/egress/gcs?path=${encodeURIComponent(hlsPrefix + "/live.m3u8")}`
+  const replayTracks = recordingSession?.tracks ?? [];
+  const useExtendedPlaylist = playbackMode === "hls_extended" || !isRecording;
+  const playbackKey = recordingSession
+    ? `${recordingSession.sessionId}:${useExtendedPlaylist ? "extended" : "live"}`
     : null;
-  const hlsPlaylistSrc = hlsPrefix
-    ? `/api/egress/gcs?path=${encodeURIComponent(hlsPrefix + "/playlist.m3u8")}`
-    : null;
-  const activeHlsSrc =
-    playbackMode === "hls_extended" ? hlsPlaylistSrc : hlsLiveSrc;
+  const recordingReady =
+    playbackKey !== null && readyPlaybackKey === playbackKey;
+  const canReplay = replayTracks.length > 0 && recordingReady;
+  const activeRecordingSessionId =
+    [...recordingSessions]
+      .reverse()
+      .find((session) => session.endedAt === undefined)?.sessionId ?? null;
+  const recordableTracks: RecordingTrackInput[] = liveCameraTracks.map(
+    (trackRef) => ({
+      trackSid: trackRef.publication.trackSid,
+      participantIdentity: trackRef.participant.identity,
+      participantName:
+        trackRef.participant.name || trackRef.participant.identity,
+      trackName: trackRef.publication.trackName,
+      source: "camera",
+    }),
+  );
 
-  const pollForPlaylist = useCallback(async () => {
-    const prefix = `recordings/${roomName}/`;
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      if (attempts > 30) {
-        clearInterval(interval);
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/egress/gcs/list?prefix=${encodeURIComponent(prefix)}`,
-        );
-        const data = await res.json();
-        const livePlaylists = (data.playlists as string[])?.filter(
-          (p: string) => p.endsWith("live.m3u8"),
-        );
-        if (livePlaylists && livePlaylists.length > 0) {
-          const latest = livePlaylists[livePlaylists.length - 1];
-          const dir = latest.replace("/live.m3u8", "");
-          setHlsPrefix(dir);
-          clearInterval(interval);
-        }
-      } catch {
-        // keep polling
-      }
-    }, 3000);
-  }, [roomName]);
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setHistoryNow(Date.now());
+    }, 1000);
 
-  const handleRecordingStarted = useCallback(() => {
-    setIsRecording(true);
-    pollForPlaylist();
-  }, [pollForPlaylist]);
-
-  const handleRecordingStopped = useCallback(() => {
-    setIsRecording(false);
-    setPlaybackMode("webrtc_live");
-    setHlsPrefix(null);
-    setSeekTarget(null);
-    setPendingBehindLive(null);
-    setLiveWindowDuration(0);
-    setHlsCurrentTime(0);
-    setHlsDuration(0);
+    return () => {
+      window.clearInterval(interval);
+    };
   }, []);
 
-  const handleSeek = useCallback((time: number) => {
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchRecordingSessionsForRoom(roomName)
+      .then((sessions) => {
+        if (!cancelled) {
+          setRecordingSessions(sessions);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomName]);
+
+  useEffect(() => {
+    if (!recordingSession) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const nextPlaybackKey = `${recordingSession.sessionId}:${useExtendedPlaylist ? "extended" : "live"}`;
+
+    const pollForPlaylists = async () => {
+      while (!cancelled && attempts < 30) {
+        attempts += 1;
+        try {
+          const response = await fetch(
+            `/api/egress/gcs/list?prefix=${encodeURIComponent(`${recordingSession.prefix}/`)}`,
+          );
+          const data = await response.json();
+          const playlists = (data.playlists as string[]) ?? [];
+          const relevantPlaylists = playlists.filter((path) =>
+            path.endsWith(useExtendedPlaylist ? "/playlist.m3u8" : "/live.m3u8"),
+          );
+
+          if (relevantPlaylists.length >= recordingSession.tracks.length) {
+            if (!cancelled) {
+              setReadyPlaybackKey(nextPlaybackKey);
+            }
+            return;
+          }
+        } catch {
+          // keep polling while egress spins up
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    };
+
+    void pollForPlaylists();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recordingSession, useExtendedPlaylist]);
+
+  function handleRecordingStateChange(state: {
+    session: RecordingSession | null;
+    isRecording: boolean;
+  }) {
+    setIsRecording(state.isRecording);
+    if (state.session) {
+      const session = state.session;
+      setRecordingSession(state.session);
+      setRecordingSessions((previousSessions) => {
+        const nextSessions = previousSessions.filter(
+          (existingSession) => existingSession.sessionId !== session.sessionId,
+        );
+        nextSessions.push(session);
+        return nextSessions.toSorted((a, b) => a.startedAt - b.startedAt);
+      });
+    }
+    if (!state.isRecording && playbackMode === "hls_live_window") {
+      setPlaybackMode("hls_extended");
+    }
+    void fetchRecordingSessionsForRoom(roomName)
+      .then((sessions) => setRecordingSessions(sessions))
+      .catch(() => {
+        // ignore
+      });
+  }
+
+  function handleSeek(time: number) {
+    if (!recordingSession) return;
+
     if (playbackMode === "webrtc_live") {
-      setPlaybackMode("hls_live_window");
+      setPlaybackMode(isRecording ? "hls_live_window" : "hls_extended");
       setSeekTarget(time);
       setPendingBehindLive(null);
       setIsAtLiveEdge(false);
       return;
     }
 
-    if (playbackMode === "hls_live_window") {
+    if (playbackMode === "hls_live_window" && isRecording) {
       const atOldestPoint = time <= Math.max(1, liveWindowDuration * 0.02);
-      if (atOldestPoint && hlsPlaylistSrc) {
+      if (atOldestPoint) {
         const requestedBehindLive = Math.max(0, liveWindowDuration - time);
         setPendingBehindLive(requestedBehindLive);
         setPlaybackMode("hls_extended");
@@ -132,17 +226,17 @@ function RoomContent({ roomName }: { roomName: string }) {
 
     setSeekTarget(time);
     setIsAtLiveEdge(false);
-  }, [playbackMode, liveWindowDuration, hlsPlaylistSrc]);
+  }
 
-  const handleGoLive = useCallback(() => {
+  function handleGoLive() {
     setPlaybackMode("webrtc_live");
     setIsAtLiveEdge(true);
     setHlsCurrentTime((prev) => (hlsDuration > 0 ? hlsDuration : prev));
     setSeekTarget(null);
     setPendingBehindLive(null);
-  }, [hlsDuration]);
+  }
 
-  const handleHlsTimeUpdate = useCallback((time: number, duration: number) => {
+  function handleHlsTimeUpdate(time: number, duration: number) {
     setHlsCurrentTime(time);
     setHlsDuration(duration);
     if (playbackMode === "hls_live_window") {
@@ -152,11 +246,47 @@ function RoomContent({ roomName }: { roomName: string }) {
       setSeekTarget(Math.max(0, duration - pendingBehindLive));
       setPendingBehindLive(null);
     }
-  }, [playbackMode, pendingBehindLive]);
+  }
 
-  const handleHlsLiveEdge = useCallback((live: boolean) => {
+  function handleHlsLiveEdge(live: boolean) {
     setIsAtLiveEdge((prev) => (prev === live ? prev : live));
-  }, []);
+  }
+
+  function handleHistorySelect(secondsBehindLive: number) {
+    const clickedTimestamp = historyNow - secondsBehindLive * 1000;
+    const selectedSession = [...recordingSessions]
+      .reverse()
+      .find((session) => {
+        const sessionEnd = session.endedAt ?? historyNow;
+        return (
+          clickedTimestamp >= session.startedAt && clickedTimestamp <= sessionEnd
+        );
+      });
+
+    if (!selectedSession) return;
+
+    setRecordingSession(selectedSession);
+    setIsAtLiveEdge(false);
+    setHlsCurrentTime(0);
+    setHlsDuration(0);
+
+    const shouldUseLiveWindow =
+      selectedSession.endedAt === undefined &&
+      selectedSession.sessionId === activeRecordingSessionId &&
+      liveWindowDuration > 0 &&
+      secondsBehindLive <= liveWindowDuration;
+
+    if (shouldUseLiveWindow) {
+      setPlaybackMode("hls_live_window");
+      setPendingBehindLive(null);
+      setSeekTarget(Math.max(0, liveWindowDuration - secondsBehindLive));
+      return;
+    }
+
+    setPlaybackMode("hls_extended");
+    setSeekTarget(null);
+    setPendingBehindLive(secondsBehindLive);
+  }
 
   const getConnectionBadge = () => {
     switch (connectionState) {
@@ -201,12 +331,6 @@ function RoomContent({ roomName }: { roomName: string }) {
     { value: "large", label: "Large", icon: <Maximize2 className="h-4 w-4" /> },
   ];
 
-  const rewindSizeClasses: Record<TileSize, string> = {
-    small: "w-full sm:w-1/3 md:w-1/4 lg:w-1/5",
-    medium: "w-full sm:w-1/2 lg:w-1/3",
-    large: "w-full lg:w-1/2",
-  };
-
   return (
     <div className="min-h-screen p-8">
       <div className="mx-auto max-w-7xl">
@@ -227,8 +351,8 @@ function RoomContent({ roomName }: { roomName: string }) {
               {/* Recording Controls */}
               <RecordingControls
                 roomName={roomName}
-                onRecordingStarted={handleRecordingStarted}
-                onRecordingStopped={handleRecordingStopped}
+                tracks={recordableTracks}
+                onRecordingStateChange={handleRecordingStateChange}
               />
               {/* Tile Size Controls */}
               <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">
@@ -277,46 +401,37 @@ function RoomContent({ roomName }: { roomName: string }) {
           >
             <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
 
-            {/* Show HLS rewind player when scrubbing back */}
-            {isHlsMode && activeHlsSrc ? (
-              <div
-                className={cn(
-                  "relative",
-                  rewindSizeClasses[tileSize],
-                )}
-              >
-                <div className="mb-2">
-                  <Badge
-                    variant="secondary"
-                    className="h-5 px-2 text-[10px] tracking-wide uppercase"
-                  >
-                    {playbackMode === "hls_extended"
-                      ? "Rewind (Extended)"
-                      : "Rewind"}
-                  </Badge>
-                </div>
-                <HlsPlayer
-                  src={activeHlsSrc}
-                  seekTo={seekTarget}
-                  onTimeUpdate={handleHlsTimeUpdate}
-                  onLiveEdge={handleHlsLiveEdge}
-                  className="aspect-video w-full rounded-lg bg-black"
-                />
-              </div>
+            {isHlsMode && canReplay ? (
+              <ReplayGrid
+                tracks={replayTracks}
+                tileSize={tileSize}
+                useExtendedPlaylist={useExtendedPlaylist}
+                seekTo={seekTarget}
+                onTimeUpdate={handleHlsTimeUpdate}
+                onLiveEdge={handleHlsLiveEdge}
+              />
             ) : (
-              <VideoGrid tileSize={tileSize} />
+              <VideoGrid tileSize={tileSize} trackRefs={liveCameraTracks} />
             )}
 
-            {/* DVR Timeline */}
-            {isRecording && hlsPrefix && (
-              <div className="mt-4">
-                <DvrTimeline
-                  currentTime={hlsCurrentTime}
-                  duration={hlsDuration}
-                  isAtLiveEdge={isAtLiveEdge}
-                  isRecording={isRecording}
-                  onSeek={handleSeek}
-                  onGoLive={handleGoLive}
+            {(recordingSessions.length > 0 || (recordingSession && recordingReady)) && (
+              <div className="mt-4 space-y-3">
+                {/* DVR Timeline */}
+                {recordingSession && recordingReady ? (
+                  <DvrTimeline
+                    currentTime={hlsCurrentTime}
+                    duration={hlsDuration}
+                    isAtLiveEdge={isAtLiveEdge}
+                    isRecording={true}
+                    onSeek={handleSeek}
+                    onGoLive={handleGoLive}
+                  />
+                ) : null}
+                <RecordingHistoryTimeline
+                  sessions={recordingSessions}
+                  activeSessionId={activeRecordingSessionId}
+                  nowTimestamp={historyNow}
+                  onSelectTimestamp={handleHistorySelect}
                 />
               </div>
             )}
@@ -376,11 +491,11 @@ export function RoomView({ roomName }: RoomViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [roomName, credentials]);
+  }, [credentials, roomName]);
 
   useEffect(() => {
     if (credentials) {
-      fetchToken();
+      void fetchToken();
     }
   }, [credentials, fetchToken]);
 

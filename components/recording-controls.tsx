@@ -1,20 +1,28 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import type {
+  RecordingSession,
+  RecordingTrackInput,
+} from "@/lib/recording-session";
 import { Circle, Square, AlertCircle } from "lucide-react";
 
 interface RecordingControlsProps {
   roomName: string;
-  onRecordingStarted?: () => void;
-  onRecordingStopped?: () => void;
+  tracks: RecordingTrackInput[];
+  onRecordingStateChange?: (state: {
+    session: RecordingSession | null;
+    isRecording: boolean;
+  }) => void;
 }
 
 interface EgressItem {
   egressId: string;
   status: number;
   roomName: string;
+  startedAt?: number;
 }
 
 // EgressStatus enum values from LiveKit proto
@@ -23,14 +31,21 @@ const EGRESS_ACTIVE = 1;
 
 export function RecordingControls({
   roomName,
-  onRecordingStarted,
-  onRecordingStopped,
+  tracks,
+  onRecordingStateChange,
 }: RecordingControlsProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [egressId, setEgressId] = useState<string | null>(null);
+  const [egressIds, setEgressIds] = useState<string[]>([]);
+  const [recordingSession, setRecordingSession] =
+    useState<RecordingSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gcsConfigured, setGcsConfigured] = useState<boolean | null>(null);
+  const onRecordingStateChangeRef = useRef(onRecordingStateChange);
+
+  useEffect(() => {
+    onRecordingStateChangeRef.current = onRecordingStateChange;
+  }, [onRecordingStateChange]);
 
   useEffect(() => {
     fetch("/api/egress/status")
@@ -39,45 +54,65 @@ export function RecordingControls({
       .catch(() => setGcsConfigured(false));
   }, []);
 
-  const checkActiveEgress = useCallback(async () => {
+  const syncRecordingState = useCallback(async () => {
     try {
-      const res = await fetch("/api/egress/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomName }),
-      });
-      const data = await res.json();
-      const active = (data.items as EgressItem[])?.find(
-        (e) => e.status === EGRESS_ACTIVE || e.status === EGRESS_STARTING,
+      const [listRes, latestRes] = await Promise.all([
+        fetch("/api/egress/list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomName }),
+        }),
+        fetch(`/api/egress/latest?roomName=${encodeURIComponent(roomName)}`),
+      ]);
+      const [listData, latestData] = await Promise.all([
+        listRes.json(),
+        latestRes.json(),
+      ]);
+
+      const activeItems = ((listData.items as EgressItem[]) ?? []).filter(
+        (item) => item.status === EGRESS_ACTIVE || item.status === EGRESS_STARTING,
       );
-      if (active) {
-        setIsRecording(true);
-        setEgressId(active.egressId);
-        onRecordingStarted?.();
-      }
+      const session = (latestData.session as RecordingSession | null) ?? null;
+
+      setIsRecording(activeItems.length > 0);
+      setEgressIds(activeItems.map((item) => item.egressId));
+      setRecordingSession(session);
+      onRecordingStateChangeRef.current?.({
+        session,
+        isRecording: activeItems.length > 0,
+      });
     } catch {
       // ignore
     }
-  }, [roomName, onRecordingStarted]);
+  }, [roomName]);
 
   useEffect(() => {
-    if (gcsConfigured) checkActiveEgress();
-  }, [gcsConfigured, checkActiveEgress]);
+    if (gcsConfigured) {
+      void syncRecordingState();
+    }
+  }, [gcsConfigured, syncRecordingState]);
 
   const startRecording = async () => {
+    if (tracks.length === 0) {
+      setError("No camera tracks available to record.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/egress/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomName }),
+        body: JSON.stringify({ roomName, tracks }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      const session = data.session as RecordingSession;
       setIsRecording(true);
-      setEgressId(data.egressId);
-      onRecordingStarted?.();
+      setRecordingSession(session);
+      setEgressIds(session.tracks.map((track) => track.egressId));
+      onRecordingStateChangeRef.current?.({ session, isRecording: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start");
     } finally {
@@ -86,20 +121,27 @@ export function RecordingControls({
   };
 
   const stopRecording = async () => {
-    if (!egressId) return;
+    if (!recordingSession || egressIds.length === 0) return;
     setIsLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/egress/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ egressId }),
+        body: JSON.stringify({
+          roomName,
+          sessionId: recordingSession.sessionId,
+          egressIds,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      const session =
+        (data.session as RecordingSession | null) ?? recordingSession;
       setIsRecording(false);
-      setEgressId(null);
-      onRecordingStopped?.();
+      setRecordingSession(session);
+      setEgressIds([]);
+      onRecordingStateChangeRef.current?.({ session, isRecording: false });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop");
     } finally {
@@ -144,7 +186,7 @@ export function RecordingControls({
           variant="outline"
           size="sm"
           onClick={startRecording}
-          disabled={isLoading}
+          disabled={isLoading || tracks.length === 0}
           className="gap-1"
         >
           <Circle className="h-3 w-3 fill-red-500 text-red-500" />

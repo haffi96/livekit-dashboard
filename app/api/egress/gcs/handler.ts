@@ -1,45 +1,7 @@
 import { Hono } from "hono";
-import { Storage } from "@google-cloud/storage";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { getBucket, getStorage, listObjects } from "@/lib/gcs";
 
 export const gcsRouter = new Hono();
-
-function getStorage(): Storage {
-  const options = getStorageAuthOptions();
-  return new Storage(options);
-}
-
-function expandHomePath(path: string): string {
-  if (path.startsWith("~/")) {
-    return resolve(homedir(), path.slice(2));
-  }
-  return path;
-}
-
-function getStorageAuthOptions():
-  | { credentials: Record<string, unknown> }
-  | { keyFilename: string } {
-  const raw = process.env.GCS_CREDENTIALS;
-  if (!raw) throw new Error("GCS_CREDENTIALS not set");
-
-  const value = raw.trim();
-  if (value.startsWith("{")) {
-    return { credentials: JSON.parse(value) as Record<string, unknown> };
-  }
-
-  const keyFilename = expandHomePath(value);
-  // Validate file readability early for clearer API errors.
-  readFileSync(keyFilename, "utf8");
-  return { keyFilename };
-}
-
-function getBucket(): string {
-  const bucket = process.env.GCS_BUCKET;
-  if (!bucket) throw new Error("GCS_BUCKET not set");
-  return bucket;
-}
 
 // GET /api/egress/gcs?path=recordings/room/123/live.m3u8
 // Proxies GCS objects so the browser can fetch HLS playlists and segments.
@@ -71,6 +33,8 @@ gcsRouter.get("/", async (c) => {
       contentType = "video/mp2t";
     } else if (objectPath.endsWith(".mp4")) {
       contentType = "video/mp4";
+    } else if (objectPath.endsWith(".json")) {
+      contentType = "application/json";
     }
 
     const binary = new Uint8Array(contents);
@@ -108,14 +72,9 @@ gcsRouter.get("/", async (c) => {
 gcsRouter.get("/list", async (c) => {
   try {
     const prefix = c.req.query("prefix") || "recordings/";
-    const storage = getStorage();
-    const [files] = await storage.bucket(getBucket()).getFiles({
-      prefix,
-    });
-
-    const playlists = files
-      .map((f) => f.name)
-      .filter((name) => name.endsWith(".m3u8"));
+    const playlists = (await listObjects(prefix)).filter((name) =>
+      name.endsWith(".m3u8"),
+    );
 
     return c.json({ playlists });
   } catch (error) {

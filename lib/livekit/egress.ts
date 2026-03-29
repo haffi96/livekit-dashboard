@@ -10,6 +10,12 @@ import {
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { downloadObjectText, listObjects, uploadObjectText } from "@/lib/gcs";
+import {
+  RecordingSession,
+  RecordingTrack,
+  RecordingTrackInput,
+} from "@/lib/recording-session";
 import { getSession } from "@/lib/session";
 
 function toHttpUrl(url: string): string {
@@ -87,6 +93,139 @@ export async function startRoomCompositeSegmentEgress(
   });
 
   return client.startRoomCompositeEgress(roomName, { segments });
+}
+
+export function getRecordingSessionPrefix(roomName: string, sessionId: string) {
+  return `recordings/${roomName}/${sessionId}`;
+}
+
+function getRecordingManifestPath(roomName: string, sessionId: string) {
+  return `${getRecordingSessionPrefix(roomName, sessionId)}/manifest.json`;
+}
+
+function getTrackPrefix(roomName: string, sessionId: string, trackSid: string) {
+  return `${getRecordingSessionPrefix(roomName, sessionId)}/${trackSid}`;
+}
+
+async function writeRecordingSession(session: RecordingSession): Promise<void> {
+  await uploadObjectText(
+    getRecordingManifestPath(session.roomName, session.sessionId),
+    JSON.stringify(session, null, 2),
+    "application/json",
+  );
+}
+
+export async function startTrackSegmentEgresses(
+  roomName: string,
+  tracks: RecordingTrackInput[],
+): Promise<RecordingSession> {
+  const client = await getEgressClient();
+  const sessionId = String(Date.now());
+  const startedAt = Date.now();
+  const startedEgressIds: string[] = [];
+
+  try {
+    const recordingTracks = await Promise.all(
+      tracks.map(async (track): Promise<RecordingTrack> => {
+        const prefix = getTrackPrefix(roomName, sessionId, track.trackSid);
+        const segments = new SegmentedFileOutput({
+          filenamePrefix: `${prefix}/seg`,
+          playlistName: `${prefix}/playlist.m3u8`,
+          livePlaylistName: `${prefix}/live.m3u8`,
+          segmentDuration: 4,
+          protocol: SegmentedFileProtocol.HLS_PROTOCOL,
+          output: { case: "gcp", value: gcsUpload() },
+        });
+
+        const info = await client.startTrackCompositeEgress(
+          roomName,
+          { segments },
+          { videoTrackId: track.trackSid },
+        );
+        startedEgressIds.push(info.egressId);
+
+        return {
+          ...track,
+          egressId: info.egressId,
+          prefix,
+          livePlaylistPath: `${prefix}/live.m3u8`,
+          playlistPath: `${prefix}/playlist.m3u8`,
+        };
+      }),
+    );
+
+    const session: RecordingSession = {
+      version: 1,
+      roomName,
+      sessionId,
+      prefix: getRecordingSessionPrefix(roomName, sessionId),
+      startedAt,
+      tracks: recordingTracks,
+    };
+
+    await writeRecordingSession(session);
+    return session;
+  } catch (error) {
+    await Promise.allSettled(startedEgressIds.map((egressId) => stopEgress(egressId)));
+    throw error;
+  }
+}
+
+export async function markRecordingSessionEnded(
+  roomName: string,
+  sessionId: string,
+  endedAt = Date.now(),
+): Promise<RecordingSession | null> {
+  const manifestPath = getRecordingManifestPath(roomName, sessionId);
+  const rawSession = await downloadObjectText(manifestPath);
+  if (!rawSession) return null;
+
+  const session = JSON.parse(rawSession) as RecordingSession;
+  const completedSession: RecordingSession = { ...session, endedAt };
+  await writeRecordingSession(completedSession);
+  return completedSession;
+}
+
+export async function getLatestRecordingSession(
+  roomName: string,
+): Promise<RecordingSession | null> {
+  const manifestPaths = (await listObjects(`recordings/${roomName}/`))
+    .filter((path) => path.endsWith("/manifest.json"))
+    .sort();
+
+  const latestManifest = manifestPaths.at(-1);
+  if (!latestManifest) return null;
+
+  const rawSession = await downloadObjectText(latestManifest);
+  if (!rawSession) return null;
+
+  return JSON.parse(rawSession) as RecordingSession;
+}
+
+export async function listRecordingSessions(
+  roomName: string,
+): Promise<RecordingSession[]> {
+  const manifestPaths = (await listObjects(`recordings/${roomName}/`))
+    .filter((path) => path.endsWith("/manifest.json"))
+    .sort();
+
+  const sessions = await Promise.all(
+    manifestPaths.map(async (manifestPath) => {
+      const rawSession = await downloadObjectText(manifestPath);
+      if (!rawSession) return null;
+      return JSON.parse(rawSession) as RecordingSession;
+    }),
+  );
+
+  return sessions
+    .filter((session): session is RecordingSession => session !== null)
+    .sort((a, b) => a.startedAt - b.startedAt);
+}
+
+export async function stopTrackEgresses(
+  egressIds: string[],
+): Promise<PromiseSettledResult<EgressInfo>[]> {
+  return Promise.allSettled(egressIds.map((egressId) => stopEgress(egressId)));
 }
 
 export async function startTrackEgress(
