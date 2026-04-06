@@ -40,6 +40,10 @@ export async function createTokenWithCredentials(
   const token = new AccessToken(apiKey, apiSecret, {
     identity: participantName,
     name: participantName,
+    attributes: {
+      dashboardRole: "observer",
+      dashboardClient: "monitoring-dashboard",
+    },
   });
 
   token.addGrant({

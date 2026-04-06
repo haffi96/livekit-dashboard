@@ -15,6 +15,7 @@ import { RecordingControls } from "./recording-controls";
 import { ReplayGrid } from "./replay-grid";
 import { DvrTimeline } from "./dvr-timeline";
 import { RecordingHistoryTimeline } from "./recording-history-timeline";
+import { ParticipantRoster } from "./participant-roster";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,9 +69,9 @@ function RoomContent({ roomName }: { roomName: string }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSession, setRecordingSession] =
     useState<RecordingSession | null>(null);
-  const [recordingSessions, setRecordingSessions] = useState<RecordingSession[]>(
-    [],
-  );
+  const [recordingSessions, setRecordingSessions] = useState<
+    RecordingSession[]
+  >([]);
   const [readyPlaybackKey, setReadyPlaybackKey] = useState<string | null>(null);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("webrtc_live");
   const [isAtLiveEdge, setIsAtLiveEdge] = useState(true);
@@ -152,7 +153,9 @@ function RoomContent({ roomName }: { roomName: string }) {
           const data = await response.json();
           const playlists = (data.playlists as string[]) ?? [];
           const relevantPlaylists = playlists.filter((path) =>
-            path.endsWith(useExtendedPlaylist ? "/playlist.m3u8" : "/live.m3u8"),
+            path.endsWith(
+              useExtendedPlaylist ? "/playlist.m3u8" : "/live.m3u8",
+            ),
           );
 
           if (relevantPlaylists.length >= recordingSession.tracks.length) {
@@ -255,14 +258,12 @@ function RoomContent({ roomName }: { roomName: string }) {
 
   function handleHistorySelect(secondsBehindLive: number) {
     const clickedTimestamp = historyNow - secondsBehindLive * 1000;
-    const selectedSession = [...recordingSessions]
-      .reverse()
-      .find((session) => {
-        const sessionEnd = session.endedAt ?? historyNow;
-        return (
-          clickedTimestamp >= session.startedAt && clickedTimestamp <= sessionEnd
-        );
-      });
+    const selectedSession = [...recordingSessions].reverse().find((session) => {
+      const sessionEnd = session.endedAt ?? historyNow;
+      return (
+        clickedTimestamp >= session.startedAt && clickedTimestamp <= sessionEnd
+      );
+    });
 
     if (!selectedSession) return;
 
@@ -400,6 +401,7 @@ function RoomContent({ roomName }: { roomName: string }) {
           <div
             className={cn(showDataPanel ? "lg:col-span-2" : "lg:col-span-1")}
           >
+            <ParticipantRoster isReplayMode={isHlsMode} />
             <h2 className="mb-4 text-lg font-semibold">Camera Feeds</h2>
 
             {isHlsMode && canReplay ? (
@@ -415,7 +417,8 @@ function RoomContent({ roomName }: { roomName: string }) {
               <VideoGrid tileSize={tileSize} trackRefs={liveCameraTracks} />
             )}
 
-            {(recordingSessions.length > 0 || (recordingSession && recordingReady)) && (
+            {(recordingSessions.length > 0 ||
+              (recordingSession && recordingReady)) && (
               <div className="mt-4 space-y-3">
                 {/* DVR Timeline */}
                 {recordingSession && recordingReady ? (
