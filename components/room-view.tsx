@@ -444,12 +444,10 @@ function RoomContent({ roomName }: { roomName: string }) {
           </div>
 
           {/* Data Panel */}
-          {showDataPanel && (
-            <div className="lg:col-span-1">
-              <h2 className="mb-4 text-lg font-semibold">Data Panel</h2>
-              <DataPanel />
-            </div>
-          )}
+          <div className={cn("lg:col-span-1", !showDataPanel && "hidden")}>
+            <h2 className="mb-4 text-lg font-semibold">Data Panel</h2>
+            <DataPanel />
+          </div>
         </div>
 
         {/* Audio Renderer (hidden, for any audio tracks) */}

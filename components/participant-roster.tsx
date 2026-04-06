@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParticipants } from "@livekit/components-react";
-import type { LocalParticipant, RemoteParticipant } from "livekit-client";
+import { type LocalParticipant, type RemoteParticipant } from "livekit-client";
 import {
   ChevronRight,
   ChevronDown,
+  Binary,
   Mic,
   MicOff,
   Video,
@@ -21,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useDataTracks } from "@/hooks/use-data-tracks";
 
 interface ParticipantRosterProps {
   isReplayMode: boolean;
@@ -79,6 +81,31 @@ export function ParticipantRoster({ isReplayMode }: ParticipantRosterProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const participants = useParticipants();
   const sortedParticipants = [...participants].sort(sortParticipants);
+  const { remoteTracks, localTracks } = useDataTracks("json-only");
+
+  const dataTrackCountByParticipant = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const track of remoteTracks) {
+      if (!track.isPublished) {
+        continue;
+      }
+      counts.set(
+        track.publisherIdentity,
+        (counts.get(track.publisherIdentity) ?? 0) + 1,
+      );
+    }
+
+    for (const participant of sortedParticipants) {
+      if (participant.isLocal) {
+        counts.set(participant.identity, localTracks.length);
+      } else if (!counts.has(participant.identity)) {
+        counts.set(participant.identity, 0);
+      }
+    }
+
+    return counts;
+  }, [localTracks.length, remoteTracks, sortedParticipants]);
 
   return (
     <section className="mb-8">
@@ -123,7 +150,9 @@ export function ParticipantRoster({ isReplayMode }: ParticipantRosterProps) {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {sortedParticipants.map((participant) => {
             const participantLabel = getParticipantLabel(participant);
-            const trackCount = participant.getTrackPublications().length;
+            const mediaTrackCount = participant.getTrackPublications().length;
+            const dataTrackCount =
+              dataTrackCountByParticipant.get(participant.identity) ?? 0;
             const observer = isObserverParticipant(participant);
             const isYou = participant.isLocal;
 
@@ -196,7 +225,13 @@ export function ParticipantRoster({ isReplayMode }: ParticipantRosterProps) {
                     <span>{formatJoinedAt(participant.joinedAt)}</span>
                     <span className="inline-flex items-center gap-1">
                       <Volume2 className="h-3.5 w-3.5" />
-                      {trackCount} published track{trackCount === 1 ? "" : "s"}
+                      {mediaTrackCount} published media track
+                      {mediaTrackCount === 1 ? "" : "s"}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Binary className="h-3.5 w-3.5" />
+                      {dataTrackCount} data track
+                      {dataTrackCount === 1 ? "" : "s"}
                     </span>
                   </div>
                 </CardContent>
