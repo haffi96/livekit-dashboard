@@ -148,12 +148,8 @@ export function RecordingHistoryTimeline({
     <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium text-neutral-100">
-            Timeline
-          </h3>
-          <p className="text-xs text-neutral-400">
-            Last {windowHours} hours
-          </p>
+          <h3 className="text-sm font-medium text-neutral-100">Timeline</h3>
+          <p className="text-xs text-neutral-400">Last {windowHours} hours</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">

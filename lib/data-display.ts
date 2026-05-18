@@ -44,4 +44,3 @@ export function formatLatencyMs(latencyMs: number | null) {
 
   return `${Math.round(latencyMs)} ms`;
 }
-

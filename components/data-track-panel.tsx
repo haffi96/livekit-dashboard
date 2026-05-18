@@ -14,11 +14,7 @@ import type {
   DataTrackFrameMessage,
   RemoteDataTrackEntry,
 } from "@/hooks/use-data-tracks";
-import {
-  formatLatencyMs,
-  formatSize,
-  formatTime,
-} from "@/lib/data-display";
+import { formatLatencyMs, formatSize, formatTime } from "@/lib/data-display";
 import { cn } from "@/lib/utils";
 
 interface DataTrackPanelProps {
@@ -73,7 +69,7 @@ export function DataTrackPanel({ track, frames }: DataTrackPanelProps) {
               <TimerReset className="h-4 w-4" />
               <span className="text-xs">Last Latency</span>
             </div>
-            <div className="break-all text-sm font-medium">
+            <div className="text-sm font-medium break-all">
               {formatLatencyMs(track.stats.lastLatencyMs)}
             </div>
           </CardContent>
@@ -132,7 +128,9 @@ export function DataTrackPanel({ track, frames }: DataTrackPanelProps) {
                             : "border-red-700/70 text-red-300",
                         )}
                       >
-                        {frame.decodeState === "ok" ? "decoded" : "decode error"}
+                        {frame.decodeState === "ok"
+                          ? "decoded"
+                          : "decode error"}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -145,7 +143,9 @@ export function DataTrackPanel({ track, frames }: DataTrackPanelProps) {
                   <div className="mb-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
                     <span className="break-all">Raw: {frame.rawPreview}</span>
                     {frame.userTimestamp && (
-                      <span className="break-all">User TS: {frame.userTimestamp}</span>
+                      <span className="break-all">
+                        User TS: {frame.userTimestamp}
+                      </span>
                     )}
                   </div>
                   <pre className="overflow-hidden break-all whitespace-pre-wrap text-neutral-200">

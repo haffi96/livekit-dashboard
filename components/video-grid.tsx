@@ -24,11 +24,10 @@ export function getVideoGridClasses(tileSize: TileSize): string {
   return gridClasses[tileSize];
 }
 
-export function VideoGrid({
-  tileSize = "medium",
-  trackRefs,
-}: VideoGridProps) {
-  const [showStats, setShowStats] = useState(false);
+export function VideoGrid({ tileSize = "medium", trackRefs }: VideoGridProps) {
+  const [expandedTrackIds, setExpandedTrackIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   // Get all video tracks from participants
   const liveTracks = useTracks([Track.Source.Camera], {
@@ -52,20 +51,33 @@ export function VideoGrid({
   }
 
   return (
-    <div
-      className={cn(
-        "grid gap-4",
-        getVideoGridClasses(tileSize),
-      )}
-    >
-      {videoTracks.map((trackRef) => (
-        <VideoTile
-          key={trackRef.publication?.trackSid}
-          trackRef={trackRef}
-          showStats={showStats}
-          onToggleStats={() => setShowStats(!showStats)}
-        />
-      ))}
+    <div className={cn("grid gap-4", getVideoGridClasses(tileSize))}>
+      {videoTracks.map((trackRef) => {
+        const trackId =
+          trackRef.publication?.trackSid ??
+          trackRef.publication?.track?.sid ??
+          trackRef.participant.identity;
+        const showStats = expandedTrackIds.has(trackId);
+
+        return (
+          <VideoTile
+            key={trackId}
+            trackRef={trackRef}
+            showStats={showStats}
+            onToggleStats={() => {
+              setExpandedTrackIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(trackId)) {
+                  next.delete(trackId);
+                } else {
+                  next.add(trackId);
+                }
+                return next;
+              });
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

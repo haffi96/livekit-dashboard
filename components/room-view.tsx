@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -36,6 +36,7 @@ import type {
   RecordingSession,
   RecordingTrackInput,
 } from "@/lib/recording-session";
+import { createPacketTrailerWorker } from "@/lib/livekit/packet-trailer";
 
 interface RoomViewProps {
   roomName: string;
@@ -463,6 +464,30 @@ export function RoomView({ roomName }: RoomViewProps) {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [packetTrailerWorker, setPacketTrailerWorker] = useState<
+    Worker | null | undefined
+  >(undefined);
+
+  useEffect(() => {
+    const worker = createPacketTrailerWorker();
+    setPacketTrailerWorker(worker);
+
+    return () => {
+      worker?.terminate();
+    };
+  }, []);
+
+  const roomOptions = useMemo(
+    () =>
+      packetTrailerWorker
+        ? {
+            packetTrailer: {
+              worker: packetTrailerWorker,
+            },
+          }
+        : undefined,
+    [packetTrailerWorker],
+  );
 
   const fetchToken = useCallback(async () => {
     if (!credentials) return;
@@ -559,7 +584,7 @@ export function RoomView({ roomName }: RoomViewProps) {
     );
   }
 
-  if (!token) {
+  if (!token || packetTrailerWorker === undefined) {
     return null;
   }
 
@@ -570,6 +595,7 @@ export function RoomView({ roomName }: RoomViewProps) {
       connect={true}
       audio={false}
       video={false}
+      options={roomOptions}
     >
       <RoomContent roomName={roomName} />
     </LiveKitRoom>

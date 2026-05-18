@@ -103,9 +103,9 @@ function getRemoteTrackKey(track: RemoteDataTrack) {
 
 export function useDataTracks(receiverMode: SerializationMode) {
   const room = useRoomContext();
-  const [remoteTracks, setRemoteTracks] = useState<Map<string, RemoteTrackData>>(
-    new Map(),
-  );
+  const [remoteTracks, setRemoteTracks] = useState<
+    Map<string, RemoteTrackData>
+  >(new Map());
   const [localTracks, setLocalTracks] = useState<Map<string, LocalTrackData>>(
     new Map(),
   );
@@ -216,105 +216,114 @@ export function useDataTracks(receiverMode: SerializationMode) {
     [markRemoteTrack],
   );
 
-  const handleIncomingFrame = useCallback(async (track: RemoteDataTrack, frame: {
-    payload: Uint8Array;
-    userTimestamp?: bigint;
-  }) => {
-    const sid = getRemoteTrackKey(track);
-    const now = Date.now();
-    const size = frame.payload.byteLength;
-    const timestamps = frameTimestampsRef.current.get(sid) || [];
-    const sizes = frameSizesRef.current.get(sid) || [];
-
-    timestamps.push(now);
-    sizes.push(size);
-
-    const windowStart = now - RATE_WINDOW_MS;
-    let staleCount = 0;
-    while (
-      staleCount < timestamps.length &&
-      timestamps[staleCount] <= windowStart
-    ) {
-      staleCount += 1;
-    }
-    if (staleCount > 0) {
-      timestamps.splice(0, staleCount);
-    }
-    if (timestamps.length > MAX_RATE_SAMPLES_PER_TRACK) {
-      timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TRACK);
-    }
-    if (sizes.length > MAX_SIZE_SAMPLES_PER_TRACK) {
-      sizes.splice(0, sizes.length - MAX_SIZE_SAMPLES_PER_TRACK);
-    }
-
-    frameTimestampsRef.current.set(sid, timestamps);
-    frameSizesRef.current.set(sid, sizes);
-
-    let decodedData = "";
-    let decodeState: "ok" | "error" = "ok";
-
-    try {
-      decodedData = await decodePayloadByMode(
-        frame.payload,
-        receiverModeRef.current,
-      );
-    } catch (error) {
-      decodeState = "error";
-      decodedData = `[decode error: ${receiverModeRef.current}] ${
-        error instanceof Error ? error.message : "Failed to decode payload"
-      }`;
-    }
-
-    const userTimestamp = frame.userTimestamp?.toString() ?? null;
-    const numericUserTimestamp =
-      frame.userTimestamp !== undefined ? Number(frame.userTimestamp) : null;
-    const normalizedUserTimestamp =
-      numericUserTimestamp !== null
-        ? normalizeEpochTimestampMs(numericUserTimestamp)
-        : null;
-    const latencyMs =
-      normalizedUserTimestamp !== null ? now - normalizedUserTimestamp : null;
-
-    const frameMessage: DataTrackFrameMessage = {
-      id: `${sid}-${now}-${Math.random().toString(36).slice(2, 8)}`,
-      trackSid: sid,
-      trackName: track.info.name,
-      publisherIdentity: track.publisherIdentity,
-      timestamp: now,
-      userTimestamp,
-      latencyMs,
-      decodedData,
-      decodeState,
-      rawPreview: buildRawPreview(frame.payload),
-      size,
-    };
-
-    const currentRate = timestamps.length / (RATE_WINDOW_MS / 1000);
-    const averageSize =
-      sizes.length > 0
-        ? sizes.reduce((total, value) => total + value, 0) / sizes.length
-        : 0;
-
-    markRemoteTrack(sid, (existing) => ({
-      entry: {
-        ...existing.entry,
-        subscriptionState: "subscribed",
-        lastError: null,
-        stats: {
-          frameCount: existing.entry.stats.frameCount + 1,
-          currentRate,
-          averageSize,
-          lastReceived: now,
-          lastLatencyMs:
-            latencyMs !== null && Math.abs(latencyMs) < 60_000
-              ? latencyMs
-              : latencyMs,
-          lastUserTimestamp: userTimestamp,
-        },
+  const handleIncomingFrame = useCallback(
+    async (
+      track: RemoteDataTrack,
+      frame: {
+        payload: Uint8Array;
+        userTimestamp?: bigint;
       },
-      frames: [frameMessage, ...existing.frames].slice(0, MAX_FRAMES_PER_TRACK),
-    }));
-  }, [markRemoteTrack]);
+    ) => {
+      const sid = getRemoteTrackKey(track);
+      const now = Date.now();
+      const size = frame.payload.byteLength;
+      const timestamps = frameTimestampsRef.current.get(sid) || [];
+      const sizes = frameSizesRef.current.get(sid) || [];
+
+      timestamps.push(now);
+      sizes.push(size);
+
+      const windowStart = now - RATE_WINDOW_MS;
+      let staleCount = 0;
+      while (
+        staleCount < timestamps.length &&
+        timestamps[staleCount] <= windowStart
+      ) {
+        staleCount += 1;
+      }
+      if (staleCount > 0) {
+        timestamps.splice(0, staleCount);
+      }
+      if (timestamps.length > MAX_RATE_SAMPLES_PER_TRACK) {
+        timestamps.splice(0, timestamps.length - MAX_RATE_SAMPLES_PER_TRACK);
+      }
+      if (sizes.length > MAX_SIZE_SAMPLES_PER_TRACK) {
+        sizes.splice(0, sizes.length - MAX_SIZE_SAMPLES_PER_TRACK);
+      }
+
+      frameTimestampsRef.current.set(sid, timestamps);
+      frameSizesRef.current.set(sid, sizes);
+
+      let decodedData = "";
+      let decodeState: "ok" | "error" = "ok";
+
+      try {
+        decodedData = await decodePayloadByMode(
+          frame.payload,
+          receiverModeRef.current,
+        );
+      } catch (error) {
+        decodeState = "error";
+        decodedData = `[decode error: ${receiverModeRef.current}] ${
+          error instanceof Error ? error.message : "Failed to decode payload"
+        }`;
+      }
+
+      const userTimestamp = frame.userTimestamp?.toString() ?? null;
+      const numericUserTimestamp =
+        frame.userTimestamp !== undefined ? Number(frame.userTimestamp) : null;
+      const normalizedUserTimestamp =
+        numericUserTimestamp !== null
+          ? normalizeEpochTimestampMs(numericUserTimestamp)
+          : null;
+      const latencyMs =
+        normalizedUserTimestamp !== null ? now - normalizedUserTimestamp : null;
+
+      const frameMessage: DataTrackFrameMessage = {
+        id: `${sid}-${now}-${Math.random().toString(36).slice(2, 8)}`,
+        trackSid: sid,
+        trackName: track.info.name,
+        publisherIdentity: track.publisherIdentity,
+        timestamp: now,
+        userTimestamp,
+        latencyMs,
+        decodedData,
+        decodeState,
+        rawPreview: buildRawPreview(frame.payload),
+        size,
+      };
+
+      const currentRate = timestamps.length / (RATE_WINDOW_MS / 1000);
+      const averageSize =
+        sizes.length > 0
+          ? sizes.reduce((total, value) => total + value, 0) / sizes.length
+          : 0;
+
+      markRemoteTrack(sid, (existing) => ({
+        entry: {
+          ...existing.entry,
+          subscriptionState: "subscribed",
+          lastError: null,
+          stats: {
+            frameCount: existing.entry.stats.frameCount + 1,
+            currentRate,
+            averageSize,
+            lastReceived: now,
+            lastLatencyMs:
+              latencyMs !== null && Math.abs(latencyMs) < 60_000
+                ? latencyMs
+                : latencyMs,
+            lastUserTimestamp: userTimestamp,
+          },
+        },
+        frames: [frameMessage, ...existing.frames].slice(
+          0,
+          MAX_FRAMES_PER_TRACK,
+        ),
+      }));
+    },
+    [markRemoteTrack],
+  );
 
   const startSubscription = useCallback(
     (sid: string, mode: DataTrackSubscriptionState = "auto-subscribing") => {
@@ -352,7 +361,9 @@ export function useDataTracks(receiverMode: SerializationMode) {
             ...existing,
             entry: {
               ...existing.entry,
-              subscriptionState: existing.entry.isPublished ? "paused" : "ended",
+              subscriptionState: existing.entry.isPublished
+                ? "paused"
+                : "ended",
             },
           }));
         } catch (error) {
@@ -369,12 +380,11 @@ export function useDataTracks(receiverMode: SerializationMode) {
                   ? "paused"
                   : "ended"
                 : "error",
-              lastError:
-                aborted
-                  ? null
-                  : error instanceof Error
-                    ? error.message
-                    : "Track subscription failed",
+              lastError: aborted
+                ? null
+                : error instanceof Error
+                  ? error.message
+                  : "Track subscription failed",
             },
           }));
         } finally {
@@ -395,9 +405,12 @@ export function useDataTracks(receiverMode: SerializationMode) {
     [startSubscription],
   );
 
-  const pauseRemoteTrack = useCallback((sid: string) => {
-    stopSubscription(sid, "paused");
-  }, [stopSubscription]);
+  const pauseRemoteTrack = useCallback(
+    (sid: string) => {
+      stopSubscription(sid, "paused");
+    },
+    [stopSubscription],
+  );
 
   const publishLocalTrack = useCallback(
     async (name: string) => {
