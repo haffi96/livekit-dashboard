@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useCallback, useRef, useState } from "react";
-import { TrackReference } from "@livekit/components-react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
+import { TrackReference, useRoomContext } from "@livekit/components-react";
 import { VideoTrack } from "@livekit/components-react";
-import { RemoteVideoTrack } from "livekit-client";
+import { RemoteVideoTrack, TrackEvent } from "livekit-client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  addVideoFrameMetric,
+  useVideoFrameMetrics,
+} from "@/lib/video-frame-metrics-store";
+import { formatLatencyMs } from "@/lib/data-display";
 
 interface VideoTileProps {
   trackRef: TrackReference;
@@ -45,9 +50,17 @@ export function VideoTile({
   showStats,
   onToggleStats,
 }: VideoTileProps) {
+  const room = useRoomContext();
   const participantName =
     trackRef.participant.name || trackRef.participant.identity;
   const [stats, setStats] = useState<VideoStats>(defaultStats);
+  const [showTrailerStats, setShowTrailerStats] = useState(true);
+  const trackSid =
+    trackRef.publication?.trackSid ??
+    trackRef.publication?.track?.sid ??
+    trackRef.participant.identity;
+  const trailerMetrics = useVideoFrameMetrics(trackSid);
+  const latestTrailerMetric = trailerMetrics[0] ?? null;
 
   // Track previous bytes for bitrate calculation
   const prevBytesRef = useRef<{ bytes: number; timestamp: number } | null>(
@@ -162,12 +175,96 @@ export function VideoTile({
     };
   }, [showStats, fetchStats]);
 
+  useEffect(() => {
+    const track = trackRef.publication?.track;
+    if (!track || !(track instanceof RemoteVideoTrack)) {
+      return;
+    }
+
+    const handleTimeSyncUpdate = ({
+      rtpTimestamp,
+    }: {
+      timestamp: number;
+      rtpTimestamp: number;
+    }) => {
+      const metadata = track.lookupFrameMetadata({ rtpTimestamp });
+      if (!metadata) {
+        return;
+      }
+
+      const receivedAtMs = Date.now();
+      const publisherTimestampUs =
+        metadata.userTimestamp > BigInt(0)
+          ? metadata.userTimestamp.toString()
+          : null;
+      const publisherTimestampMs =
+        metadata.userTimestamp > BigInt(0)
+          ? Number(metadata.userTimestamp / BigInt(1000))
+          : null;
+      const oneWayLatencyMs =
+        publisherTimestampMs !== null
+          ? receivedAtMs - publisherTimestampMs
+          : null;
+
+      addVideoFrameMetric({
+        roomName: room.name,
+        subscriberIdentity: room.localParticipant.identity,
+        publisherIdentity: trackRef.participant.identity,
+        trackSid,
+        trackName: trackRef.publication?.trackName ?? trackSid,
+        rtpTimestamp,
+        frameId: metadata.frameId || null,
+        publisherTimestampUs,
+        publisherTimestampMs,
+        receivedAtMs,
+        oneWayLatencyMs,
+      });
+    };
+
+    track.on(TrackEvent.TimeSyncUpdate, handleTimeSyncUpdate);
+    return () => {
+      track.off(TrackEvent.TimeSyncUpdate, handleTimeSyncUpdate);
+    };
+  }, [
+    room.localParticipant.identity,
+    room.name,
+    trackRef.participant.identity,
+    trackRef.publication,
+    trackSid,
+  ]);
+
   const formatBitrate = (kbps: number) => {
     if (kbps >= 1000) {
       return `${(kbps / 1000).toFixed(1)} Mbps`;
     }
     return `${kbps} kbps`;
   };
+
+  const trailerRows = useMemo(() => {
+    if (!latestTrailerMetric) {
+      return {
+        rtpTimestamp: "-",
+        frameId: "-",
+        publisherTimestamp: "-",
+        receivedTimestamp: "-",
+        oneWayLatency: "-",
+      };
+    }
+
+    return {
+      rtpTimestamp: String(latestTrailerMetric.rtpTimestamp),
+      frameId:
+        latestTrailerMetric.frameId !== null
+          ? String(latestTrailerMetric.frameId)
+          : "-",
+      publisherTimestamp:
+        latestTrailerMetric.publisherTimestampMs !== null
+          ? formatTimestamp(latestTrailerMetric.publisherTimestampMs)
+          : "-",
+      receivedTimestamp: formatTimestamp(latestTrailerMetric.receivedAtMs),
+      oneWayLatency: formatLatencyMs(latestTrailerMetric.oneWayLatencyMs),
+    };
+  }, [latestTrailerMetric]);
 
   return (
     <Card className="overflow-hidden border-neutral-800 bg-neutral-900">
@@ -207,6 +304,7 @@ export function VideoTile({
         className={cn(
           "overflow-hidden transition-all duration-200",
           showStats ? "max-h-64" : "max-h-0",
+          showStats && showTrailerStats && "max-h-96",
         )}
       >
         <div className="space-y-2 border-t border-neutral-800 bg-neutral-950 p-3 font-mono text-xs">
@@ -235,10 +333,54 @@ export function VideoTile({
             value={stats.rtt !== null ? `${stats.rtt} ms` : "-"}
             highlight={stats.rtt !== null && stats.rtt > 100}
           />
+          <div className="flex items-center justify-between border-t border-neutral-800 pt-2">
+            <span className="text-neutral-500">Trailer</span>
+            <button
+              type="button"
+              onClick={() => setShowTrailerStats((prev) => !prev)}
+              className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300 hover:border-neutral-500 hover:text-neutral-100"
+            >
+              {showTrailerStats ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showTrailerStats && (
+            <>
+              <StatRow label="RTP Timestamp" value={trailerRows.rtpTimestamp} />
+              <StatRow label="Frame ID" value={trailerRows.frameId} />
+              <StatRow
+                label="Publish TS"
+                value={trailerRows.publisherTimestamp}
+              />
+              <StatRow
+                label="Receive TS"
+                value={trailerRows.receivedTimestamp}
+              />
+              <StatRow
+                label="One-way"
+                value={trailerRows.oneWayLatency}
+                highlight={
+                  latestTrailerMetric?.oneWayLatencyMs !== null &&
+                  latestTrailerMetric?.oneWayLatencyMs !== undefined &&
+                  latestTrailerMetric.oneWayLatencyMs > 250
+                }
+              />
+            </>
+          )}
         </div>
       </div>
     </Card>
   );
+}
+
+function formatTimestamp(timestampMs: number) {
+  const date = new Date(timestampMs);
+  const pad = (value: number, width = 2) => String(value).padStart(width, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+    date.getSeconds(),
+  )}:${pad(date.getMilliseconds(), 3)}`;
 }
 
 function StatRow({
@@ -251,9 +393,14 @@ function StatRow({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-neutral-500">{label}</span>
-      <span className={cn("text-neutral-200", highlight && "text-yellow-500")}>
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-neutral-500">{label}</span>
+      <span
+        className={cn(
+          "min-w-0 text-right break-words text-neutral-200",
+          highlight && "text-yellow-500",
+        )}
+      >
         {value}
       </span>
     </div>

@@ -166,7 +166,9 @@ export async function startTrackSegmentEgresses(
     await writeRecordingSession(session);
     return session;
   } catch (error) {
-    await Promise.allSettled(startedEgressIds.map((egressId) => stopEgress(egressId)));
+    await Promise.allSettled(
+      startedEgressIds.map((egressId) => stopEgress(egressId)),
+    );
     throw error;
   }
 }

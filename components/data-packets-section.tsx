@@ -22,7 +22,18 @@ import {
 } from "@/lib/data-serialization";
 import { cn } from "@/lib/utils";
 
-export function DataPacketsSection() {
+interface TopicPublishActivity {
+  count: number;
+  lastSent: number;
+}
+
+interface DataPacketsSectionProps {
+  outgoingTopicActivity?: Map<string, TopicPublishActivity>;
+}
+
+export function DataPacketsSection({
+  outgoingTopicActivity: externalOutgoingTopicActivity,
+}: DataPacketsSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [senderMode, setSenderMode] = useState<SerializationMode>("json-only");
   const [receiverMode, setReceiverMode] =
@@ -30,9 +41,8 @@ export function DataPacketsSection() {
   const [showSender, setShowSender] = useState(false);
   const [showReceiver, setShowReceiver] = useState(false);
   const [showAllTopics, setShowAllTopics] = useState(false);
-  const [outgoingTopicActivity, setOutgoingTopicActivity] = useState<
-    Map<string, { count: number; lastSent: number }>
-  >(new Map());
+  const [manualOutgoingTopicActivity, setManualOutgoingTopicActivity] =
+    useState<Map<string, TopicPublishActivity>>(new Map());
 
   const {
     topics,
@@ -54,6 +64,20 @@ export function DataPacketsSection() {
     }
     return map;
   }, [incomingTopicActivity]);
+
+  const outgoingTopicActivity = useMemo(() => {
+    const merged = new Map(manualOutgoingTopicActivity);
+
+    for (const [topic, activity] of externalOutgoingTopicActivity ?? []) {
+      const current = merged.get(topic);
+      merged.set(topic, {
+        count: (current?.count ?? 0) + activity.count,
+        lastSent: Math.max(current?.lastSent ?? 0, activity.lastSent),
+      });
+    }
+
+    return merged;
+  }, [externalOutgoingTopicActivity, manualOutgoingTopicActivity]);
 
   const allTopics = useMemo(() => {
     return Array.from(
@@ -78,7 +102,7 @@ export function DataPacketsSection() {
         variant="ghost"
         size="sm"
         onClick={() => setIsCollapsed((prev) => !prev)}
-        className="h-auto w-full items-start justify-between gap-3 whitespace-normal px-0 py-1 text-left text-neutral-200 hover:bg-transparent hover:text-neutral-100"
+        className="h-auto w-full items-start justify-between gap-3 px-0 py-1 text-left whitespace-normal text-neutral-200 hover:bg-transparent hover:text-neutral-100"
       >
         <div className="min-w-0 flex-1 pr-2">
           <div className="text-sm font-semibold">Data Packets / Topics</div>
@@ -122,7 +146,9 @@ export function DataPacketsSection() {
             {showSender && (
               <div className="mt-3 space-y-3">
                 <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                  <p className="text-xs text-neutral-400">Sender Serialization</p>
+                  <p className="text-xs text-neutral-400">
+                    Sender Serialization
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {SERIALIZATION_MODE_OPTIONS.map((mode) => (
                       <button
@@ -143,7 +169,7 @@ export function DataPacketsSection() {
                 <DataSender
                   senderMode={senderMode}
                   onPublishSuccess={(topic, timestamp) => {
-                    setOutgoingTopicActivity((prev) => {
+                    setManualOutgoingTopicActivity((prev) => {
                       const next = new Map(prev);
                       const current = next.get(topic);
                       next.set(topic, {
@@ -179,7 +205,9 @@ export function DataPacketsSection() {
             {showReceiver && (
               <div className="mt-3 space-y-3">
                 <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                  <p className="text-xs text-neutral-400">Receiver Serialization</p>
+                  <p className="text-xs text-neutral-400">
+                    Receiver Serialization
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {SERIALIZATION_MODE_OPTIONS.map((mode) => (
                       <button

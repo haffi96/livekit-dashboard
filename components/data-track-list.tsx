@@ -77,12 +77,18 @@ export function DataTrackList({
                   </span>
                   <Badge
                     variant="outline"
-                    className={cn("text-[10px]", getStateClassName(track.subscriptionState))}
+                    className={cn(
+                      "text-[10px]",
+                      getStateClassName(track.subscriptionState),
+                    )}
                   >
                     {track.subscriptionState}
                   </Badge>
                   {!track.isPublished && (
-                    <Badge variant="outline" className="text-[10px] text-neutral-400">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] text-neutral-400"
+                    >
                       unpublished
                     </Badge>
                   )}
@@ -95,7 +101,9 @@ export function DataTrackList({
                   <span>{track.stats.currentRate.toFixed(1)} Hz</span>
                   <span>{formatSize(track.stats.averageSize)} avg</span>
                   {track.stats.lastLatencyMs !== null && (
-                    <span>{formatLatencyMs(track.stats.lastLatencyMs)} latency</span>
+                    <span>
+                      {formatLatencyMs(track.stats.lastLatencyMs)} latency
+                    </span>
                   )}
                 </div>
               </button>

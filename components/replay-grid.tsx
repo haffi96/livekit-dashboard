@@ -51,10 +51,16 @@ export function ReplayGrid({
                 className="h-full w-full object-cover"
               />
               <div className="absolute bottom-2 left-2 flex gap-2">
-                <Badge variant="secondary" className="bg-black/70 backdrop-blur-sm">
+                <Badge
+                  variant="secondary"
+                  className="bg-black/70 backdrop-blur-sm"
+                >
                   {participantLabel}
                 </Badge>
-                <Badge variant="secondary" className="bg-black/70 text-[10px] uppercase">
+                <Badge
+                  variant="secondary"
+                  className="bg-black/70 text-[10px] uppercase"
+                >
                   Replay
                 </Badge>
               </div>

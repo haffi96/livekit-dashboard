@@ -36,7 +36,9 @@ export function DataTrackPublisher({
 }: DataTrackPublisherProps) {
   const [trackName, setTrackName] = useState("");
   const [selectedTrackSid, setSelectedTrackSid] = useState<string | null>(null);
-  const [payload, setPayload] = useState('{\n  "message": "Telemetry sample"\n}');
+  const [payload, setPayload] = useState(
+    '{\n  "message": "Telemetry sample"\n}',
+  );
   const [frequency, setFrequency] = useState(0);
   const [includeUserTimestamp, setIncludeUserTimestamp] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -85,7 +87,8 @@ export function DataTrackPublisher({
     ? selectedTrackSid
     : (localTracks[0]?.sid ?? null);
   const selectedTrack =
-    localTracks.find((track) => track.sid === effectiveSelectedTrackSid) ?? null;
+    localTracks.find((track) => track.sid === effectiveSelectedTrackSid) ??
+    null;
   const estimatedBytes = textEncoder.encode(payload).byteLength;
 
   const sendFrame = useCallback(async () => {
@@ -249,7 +252,7 @@ export function DataTrackPublisher({
             ) : (
               <div className="space-y-2">
                 {localTracks.map((track) => {
-                        const isSelected = effectiveSelectedTrackSid === track.sid;
+                  const isSelected = effectiveSelectedTrackSid === track.sid;
                   return (
                     <div
                       key={track.sid}
@@ -273,7 +276,9 @@ export function DataTrackPublisher({
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                           <span>{track.framesSent} frames sent</span>
-                          {track.lastSent && <span>last: {formatTime(track.lastSent)}</span>}
+                          {track.lastSent && (
+                            <span>last: {formatTime(track.lastSent)}</span>
+                          )}
                         </div>
                       </button>
                       <Button
@@ -358,7 +363,9 @@ export function DataTrackPublisher({
             />
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
               <span>Approx. raw payload size: {estimatedBytes} B</span>
-              <span>Data tracks are most reliable below roughly 1200 B per frame.</span>
+              <span>
+                Data tracks are most reliable below roughly 1200 B per frame.
+              </span>
             </div>
           </div>
 
@@ -366,10 +373,13 @@ export function DataTrackPublisher({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Waves className="h-4 w-4 text-cyan-300" />
-                <span className="text-sm text-neutral-200">Attach user timestamp</span>
+                <span className="text-sm text-neutral-200">
+                  Attach user timestamp
+                </span>
               </div>
               <p className="text-xs text-neutral-500">
-                Adds a sender timestamp so the receiver can estimate one-way latency.
+                Adds a sender timestamp so the receiver can estimate one-way
+                latency.
               </p>
             </div>
             <button
@@ -389,7 +399,8 @@ export function DataTrackPublisher({
 
           <div className="flex items-center justify-between">
             <div className="text-xs text-neutral-400">
-              Sender mode: <span className="text-neutral-200">{senderMode}</span>
+              Sender mode:{" "}
+              <span className="text-neutral-200">{senderMode}</span>
             </div>
             {isSending ? (
               <Button
@@ -424,8 +435,11 @@ export function DataTrackPublisher({
 
           {framesSent > 0 && (
             <div className="text-xs text-neutral-400">
-              Frames sent: <span className="font-medium text-neutral-200">{framesSent}</span>
-              {frequency > 0 && isSending && <span className="ml-2">at {frequency} Hz</span>}
+              Frames sent:{" "}
+              <span className="font-medium text-neutral-200">{framesSent}</span>
+              {frequency > 0 && isSending && (
+                <span className="ml-2">at {frequency} Hz</span>
+              )}
             </div>
           )}
         </CardContent>

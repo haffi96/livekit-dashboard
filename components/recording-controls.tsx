@@ -70,7 +70,8 @@ export function RecordingControls({
       ]);
 
       const activeItems = ((listData.items as EgressItem[]) ?? []).filter(
-        (item) => item.status === EGRESS_ACTIVE || item.status === EGRESS_STARTING,
+        (item) =>
+          item.status === EGRESS_ACTIVE || item.status === EGRESS_STARTING,
       );
       const session = (latestData.session as RecordingSession | null) ?? null;
 
@@ -165,11 +166,11 @@ export function RecordingControls({
       <button
         type="button"
         aria-label="Recording storage notice"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-800 text-neutral-400 transition hover:border-neutral-700 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-800 text-neutral-400 transition hover:border-neutral-700 hover:text-neutral-200 focus-visible:ring-2 focus-visible:ring-sky-400/80 focus-visible:outline-none"
       >
         <Info className="h-3.5 w-3.5" />
       </button>
-      <div className="pointer-events-none absolute right-0 top-full z-10 mt-2 w-56 rounded-md border border-neutral-800 bg-neutral-950/95 p-2 text-[11px] leading-4 text-neutral-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="pointer-events-none absolute top-full right-0 z-10 mt-2 w-56 rounded-md border border-neutral-800 bg-neutral-950/95 p-2 text-[11px] leading-4 text-neutral-200 opacity-0 shadow-lg transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
         Recordings are saved in a private GCS bucket.
       </div>
     </div>
