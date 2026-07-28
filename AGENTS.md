@@ -25,9 +25,20 @@ The dev server runs on `localhost:3000` with Turbopack. The `IRON_SESSION_PASSWO
 | Format fix    | `pnpm fmt`       |
 | Build         | `pnpm build`     |
 
+### Local end-to-end testing (no cloud account needed)
+
+To exercise the full flow (list rooms + view live video/stats) without a LiveKit cloud project, run a local dev server:
+
+```bash
+livekit-server --dev   # API key "devkey", secret "secret", ws://localhost:7880
+```
+
+Then in the dashboard credential form use URL `ws://localhost:7880`, key `devkey`, secret `secret`. Publish a test stream (test pattern) so a room appears with video — the canonical GStreamer + `lk` flow is documented in `README.md` under "Testing with GStreamer". `livekit-server` and the `lk` CLI are preinstalled in the Cursor Cloud VM (the `lk` binary is also built in the sibling `livekit-cli` repo at `./bin/lk`).
+
 ### Gotchas
 
 - `IRON_SESSION_PASSWORD` must be set before running `pnpm dev` or `pnpm build`, otherwise session/credential storage will fail at runtime.
 - The app validates LiveKit credentials by attempting to list rooms on the provided server. Without a real LiveKit server, the credential form will show a connection error — this is expected behavior.
+- Video decodes correctly (WebRTC stats show live resolution/bitrate/fps), but the `<video>` element may render black in the Cursor Cloud VM's headless Chrome due to GPU compositing; screen recordings capture the real frames even when live screenshots look black.
 - `pnpm-workspace.yaml` uses `ignoredBuiltDependencies` for `cbor-extract`, `sharp`, and `unrs-resolver` to avoid native build issues.
 - There are no automated tests in this repo — only ESLint and Prettier checks.
