@@ -40,7 +40,9 @@ export function buildMessageEnvelope(
   };
 }
 
-async function gzipCompress(data: Uint8Array): Promise<Uint8Array> {
+async function gzipCompress(
+  data: Uint8Array,
+): Promise<Uint8Array<ArrayBuffer>> {
   if (typeof CompressionStream === "undefined") {
     throw new Error("gzip compression is not supported in this browser");
   }
@@ -65,7 +67,7 @@ async function gzipDecompress(data: Uint8Array): Promise<Uint8Array> {
 export async function encodePayloadByMode(
   payload: OutgoingMessageEnvelope,
   mode: SerializationMode,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const payloadJson = JSON.stringify(payload);
 
   if (mode === "json-only") {
@@ -76,7 +78,9 @@ export async function encodePayloadByMode(
     return gzipCompress(encoder.encode(payloadJson));
   }
 
-  return encodeCbor(payload);
+  // cbor-x may hand back a view over a shared/pooled buffer; livekit-client
+  // 2.22 requires a non-shared ArrayBuffer for publishData and tryPush.
+  return new Uint8Array(encodeCbor(payload));
 }
 
 export async function decodePayloadByMode(
