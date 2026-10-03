@@ -28,6 +28,9 @@ import {
   Maximize2,
   Minimize2,
   Square,
+  Volume2,
+  VolumeX,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -36,7 +39,11 @@ import type {
   RecordingSession,
   RecordingTrackInput,
 } from "@/lib/recording-session";
-import { createPacketTrailerWorker } from "@/lib/livekit/packet-trailer";
+import { createFrameMetadataWorker } from "@/lib/livekit/frame-metadata";
+import {
+  PlaybackSettingsProvider,
+  usePlaybackSettings,
+} from "@/lib/livekit/playback-settings";
 
 interface RoomViewProps {
   roomName: string;
@@ -58,6 +65,8 @@ async function fetchRecordingSessionsForRoom(roomName: string) {
 
 function RoomContent({ roomName }: { roomName: string }) {
   const connectionState = useConnectionState();
+  const { lowLatency, audioEnabled, setLowLatency, setAudioEnabled } =
+    usePlaybackSettings();
   const liveCameraTracks = useTracks([Track.Source.Camera], {
     onlySubscribed: true,
   }).filter((trackRef) => trackRef.publication?.track !== undefined);
@@ -372,6 +381,40 @@ function RoomContent({ roomName }: { roomName: string }) {
                   </Button>
                 ))}
               </div>
+              {/* Playback: zero jitter buffer / audio subscription */}
+              <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1">
+                <Button
+                  variant={lowLatency ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setLowLatency(!lowLatency)}
+                  title={
+                    lowLatency
+                      ? "Low latency on: frames render as soon as decoded (late frames freeze)"
+                      : "Low latency off: Chrome's adaptive jitter buffer"
+                  }
+                  className="h-8 gap-1 px-2"
+                >
+                  <Zap className="h-4 w-4" />
+                  <span className="text-xs">Low latency</span>
+                </Button>
+                <Button
+                  variant={audioEnabled ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setAudioEnabled(!audioEnabled)}
+                  title={
+                    audioEnabled
+                      ? "Audio on: video is delayed to stay in sync with audio"
+                      : "Audio off: audio tracks are not subscribed"
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  {audioEnabled ? (
+                    <Volume2 className="h-4 w-4" />
+                  ) : (
+                    <VolumeX className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               {/* Data Panel Toggle */}
               <Button
                 variant={showDataPanel ? "secondary" : "outline"}
@@ -451,8 +494,9 @@ function RoomContent({ roomName }: { roomName: string }) {
           </div>
         </div>
 
-        {/* Audio Renderer (hidden, for any audio tracks) */}
-        <RoomAudioRenderer />
+        {/* Audio Renderer (hidden); only mounted when audio is enabled so
+            Chrome does not hold video back to sync with the audio buffer */}
+        {audioEnabled && <RoomAudioRenderer />}
         <ConnectionStateToast />
       </div>
     </div>
@@ -464,13 +508,13 @@ export function RoomView({ roomName }: RoomViewProps) {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [packetTrailerWorker, setPacketTrailerWorker] = useState<
+  const [frameMetadataWorker, setFrameMetadataWorker] = useState<
     Worker | null | undefined
   >(undefined);
 
   useEffect(() => {
-    const worker = createPacketTrailerWorker();
-    setPacketTrailerWorker(worker);
+    const worker = createFrameMetadataWorker();
+    setFrameMetadataWorker(worker);
 
     return () => {
       worker?.terminate();
@@ -479,14 +523,14 @@ export function RoomView({ roomName }: RoomViewProps) {
 
   const roomOptions = useMemo(
     () =>
-      packetTrailerWorker
+      frameMetadataWorker
         ? {
-            packetTrailer: {
-              worker: packetTrailerWorker,
+            frameMetadata: {
+              worker: frameMetadataWorker,
             },
           }
         : undefined,
-    [packetTrailerWorker],
+    [frameMetadataWorker],
   );
 
   const fetchToken = useCallback(async () => {
@@ -584,7 +628,7 @@ export function RoomView({ roomName }: RoomViewProps) {
     );
   }
 
-  if (!token || packetTrailerWorker === undefined) {
+  if (!token || frameMetadataWorker === undefined) {
     return null;
   }
 
@@ -597,7 +641,9 @@ export function RoomView({ roomName }: RoomViewProps) {
       video={false}
       options={roomOptions}
     >
-      <RoomContent roomName={roomName} />
+      <PlaybackSettingsProvider>
+        <RoomContent roomName={roomName} />
+      </PlaybackSettingsProvider>
     </LiveKitRoom>
   );
 }

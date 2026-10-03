@@ -14,6 +14,10 @@ import {
   useVideoFrameMetrics,
 } from "@/lib/video-frame-metrics-store";
 import { formatLatencyMs } from "@/lib/data-display";
+import {
+  applyLowLatencyToReceiver,
+  usePlaybackSettings,
+} from "@/lib/livekit/playback-settings";
 
 interface VideoTileProps {
   trackRef: TrackReference;
@@ -31,6 +35,13 @@ interface VideoStats {
   rtt: number | null; // in ms
   packetsReceived: number;
   packetsLost: number;
+  // Receiver-side latency breakdown, averaged per frame over the poll interval
+  jitterBufferMs: number | null; // time frames sat in the jitter buffer
+  processingDelayMs: number | null; // last packet received -> frame decoded
+  decodeMs: number | null; // decoder time only
+  decoder: string; // decoderImplementation from inbound-rtp
+  nackCount: number;
+  freezeCount: number;
 }
 
 const defaultStats: VideoStats = {
@@ -43,7 +54,33 @@ const defaultStats: VideoStats = {
   rtt: null,
   packetsReceived: 0,
   packetsLost: 0,
+  jitterBufferMs: null,
+  processingDelayMs: null,
+  decodeMs: null,
+  decoder: "-",
+  nackCount: 0,
+  freezeCount: 0,
 };
+
+// Cumulative inbound-rtp counters used to compute per-interval averages.
+interface LatencyCounters {
+  jitterBufferDelay: number;
+  jitterBufferEmittedCount: number;
+  totalProcessingDelay: number;
+  totalDecodeTime: number;
+  framesDecoded: number;
+}
+
+function averageMs(
+  totalSeconds: number,
+  count: number,
+  prev?: { total: number; count: number },
+): number | null {
+  const total = prev ? totalSeconds - prev.total : totalSeconds;
+  const n = prev ? count - prev.count : count;
+  if (n <= 0) return null;
+  return Math.round((total / n) * 1000 * 10) / 10;
+}
 
 export function VideoTile({
   trackRef,
@@ -51,6 +88,7 @@ export function VideoTile({
   onToggleStats,
 }: VideoTileProps) {
   const room = useRoomContext();
+  const { lowLatency } = usePlaybackSettings();
   const participantName =
     trackRef.participant.name || trackRef.participant.identity;
   const [stats, setStats] = useState<VideoStats>(defaultStats);
@@ -66,6 +104,18 @@ export function VideoTile({
   const prevBytesRef = useRef<{ bytes: number; timestamp: number } | null>(
     null,
   );
+  const prevCountersRef = useRef<LatencyCounters | null>(null);
+
+  // Zero the receiver's jitter buffer target while low-latency mode is on.
+  // The receiver only exists once the track is subscribed, so re-run when the
+  // publication's track changes as well as when the toggle flips.
+  useEffect(() => {
+    const track = trackRef.publication?.track;
+    if (!track || !(track instanceof RemoteVideoTrack)) {
+      return;
+    }
+    applyLowLatencyToReceiver(track.receiver, lowLatency);
+  }, [trackRef.publication?.track, lowLatency]);
 
   const fetchStats = useCallback(async () => {
     const track = trackRef.publication?.track;
@@ -127,6 +177,46 @@ export function VideoTile({
           }
 
           codecId = value.codecId as string | null;
+
+          const counters: LatencyCounters = {
+            jitterBufferDelay: (value.jitterBufferDelay as number) || 0,
+            jitterBufferEmittedCount:
+              (value.jitterBufferEmittedCount as number) || 0,
+            totalProcessingDelay: (value.totalProcessingDelay as number) || 0,
+            totalDecodeTime: (value.totalDecodeTime as number) || 0,
+            framesDecoded: (value.framesDecoded as number) || 0,
+          };
+          const prev = prevCountersRef.current;
+          newStats.jitterBufferMs = averageMs(
+            counters.jitterBufferDelay,
+            counters.jitterBufferEmittedCount,
+            prev
+              ? {
+                  total: prev.jitterBufferDelay,
+                  count: prev.jitterBufferEmittedCount,
+                }
+              : undefined,
+          );
+          newStats.processingDelayMs = averageMs(
+            counters.totalProcessingDelay,
+            counters.framesDecoded,
+            prev
+              ? { total: prev.totalProcessingDelay, count: prev.framesDecoded }
+              : undefined,
+          );
+          newStats.decodeMs = averageMs(
+            counters.totalDecodeTime,
+            counters.framesDecoded,
+            prev
+              ? { total: prev.totalDecodeTime, count: prev.framesDecoded }
+              : undefined,
+          );
+          prevCountersRef.current = counters;
+
+          newStats.decoder =
+            (value.decoderImplementation as string | undefined) ?? "-";
+          newStats.nackCount = (value.nackCount as number) || 0;
+          newStats.freezeCount = (value.freezeCount as number) || 0;
         }
 
         // Get candidate-pair stats for RTT
@@ -161,6 +251,7 @@ export function VideoTile({
   useEffect(() => {
     if (!showStats) {
       prevBytesRef.current = null;
+      prevCountersRef.current = null;
       return;
     }
 
@@ -303,8 +394,8 @@ export function VideoTile({
       <div
         className={cn(
           "overflow-hidden transition-all duration-200",
-          showStats ? "max-h-64" : "max-h-0",
-          showStats && showTrailerStats && "max-h-96",
+          showStats ? "max-h-[28rem]" : "max-h-0",
+          showStats && showTrailerStats && "max-h-[36rem]",
         )}
       >
         <div className="space-y-2 border-t border-neutral-800 bg-neutral-950 p-3 font-mono text-xs">
@@ -332,6 +423,41 @@ export function VideoTile({
             label="RTT"
             value={stats.rtt !== null ? `${stats.rtt} ms` : "-"}
             highlight={stats.rtt !== null && stats.rtt > 100}
+          />
+          <div className="border-t border-neutral-800 pt-2 text-neutral-500">
+            Receiver latency (per frame, last 1 s)
+          </div>
+          <StatRow
+            label="Jitter buffer"
+            value={
+              stats.jitterBufferMs !== null ? `${stats.jitterBufferMs} ms` : "-"
+            }
+            highlight={
+              stats.jitterBufferMs !== null && stats.jitterBufferMs > 30
+            }
+          />
+          <StatRow
+            label="Processing"
+            value={
+              stats.processingDelayMs !== null
+                ? `${stats.processingDelayMs} ms`
+                : "-"
+            }
+            highlight={
+              stats.processingDelayMs !== null && stats.processingDelayMs > 50
+            }
+          />
+          <StatRow
+            label="Decode"
+            value={stats.decodeMs !== null ? `${stats.decodeMs} ms` : "-"}
+            highlight={stats.decodeMs !== null && stats.decodeMs > 15}
+          />
+          <StatRow label="Decoder" value={stats.decoder} />
+          <StatRow label="NACKs" value={String(stats.nackCount)} />
+          <StatRow
+            label="Freezes"
+            value={String(stats.freezeCount)}
+            highlight={stats.freezeCount > 0}
           />
           <div className="flex items-center justify-between border-t border-neutral-800 pt-2">
             <span className="text-neutral-500">Trailer</span>
